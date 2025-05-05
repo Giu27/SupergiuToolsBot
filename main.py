@@ -1,7 +1,8 @@
-import telebot, os, logging, json
-from dotenv import load_dotenv, dotenv_values
+import telebot, os, logging, json, wikipedia, random
+from dotenv import load_dotenv
 from tinydb import TinyDB, Query
 from telebot import types
+from datetime import date
 
 load_dotenv()
 
@@ -37,6 +38,7 @@ commands = [
     types.BotCommand("setname","Modifica il tuo nome"),
     types.BotCommand("resetname","Ripristina il tuo nome originale"),
     types.BotCommand("sendtogiu","Invia un messaggio a Supergiu"),
+    types.BotCommand("eventstoday","Restituisce curiosità storiche sulla data di oggi")
 ]
 
 def store_user_data(user, bot_name, chat_id,cmd_perm,excl_sen):
@@ -54,8 +56,8 @@ def store_user_data(user, bot_name, chat_id,cmd_perm,excl_sen):
     users_table.upsert(user_data, User.user_id == user.id)
 
 def check_banned_name(name):
-    numToCh = {'1' : 'i','3' : 'e','4' : 'r', '0' : 'o', '7' : 'l', '5' : 's','$': 'e','€':'e'}
-    numToCh2 = {'1' : 'i','3' : 'e','4' : 'a', '0' : 'o', '7' : 'l', '5' : 's','$': 'e','€':'e'}
+    numToCh = {'1' : 'i','3' : 'e','4' : 'r', '0' : 'o', '7' : 'l', '5' : 's','$': 'e','€':'e','т' : 't','п' : 'n'}
+    numToCh2 = {'1' : 'i','3' : 'e','4' : 'a', '0' : 'o', '7' : 'l', '5' : 's','$': 'e','€':'e','т' : 't','п' : 'n'}
     wordname = ""
     for char in name:
         car = char
@@ -405,6 +407,27 @@ def send_to_giu(message):
     logger.info(f"Bot: {bot_answer}")
     log_file.write(f"Bot: {bot_answer}\n")
 
+@bot.message_handler(commands=["eventstoday"])
+def events_on_wikipedia(message):
+    user = message.from_user
+    log_file = open(f"{log_path}/{user.id}.txt","a")
+    wikipedia.set_lang("it")
+    engToIta = {"January": "gennaio", "February" : "febbraio", "March" : "marzo", "April" : "aprile", "May" : "maggio", "June" : "giugno",
+                "July" : "luglio", "August" : "agosto", "September" : "settembre", "October" : "ottobre" , "November" : "novembre", "December" : "dicembre"}
+    page_title = f"{date.today().day}_{engToIta[date.today().strftime("%B")]}"
+    try:
+        page = wikipedia.page(page_title)
+        content = page.section("Eventi")
+        events_list = [line for line in content.split("\n")]
+        event = random.choice(events_list)
+        bot_answer = f"{event}"
+    except wikipedia.exceptions.PageError:
+        bot_answer = "pagina non trovata"
+    bot.reply_to(message,bot_answer)
+    log(message)
+    logger.info(f"Bot: {bot_answer}")
+    log_file.write(f"Bot: {bot_answer}\n")
+        
 @bot.message_handler(commands=["setpersonname"])
 def set_person_name(message):
     choose_target(message, set_botname)
