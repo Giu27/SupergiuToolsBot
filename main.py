@@ -92,14 +92,6 @@ def set_botname(message, us_id):
     name = message.text
     current_permission = get_permission(user.id)
     log_file = open(f"{log_path}/{user.id}.txt","a")
-
-    if not current_permission:
-        bot_answer = "Non hai il permesso di usare questo comando"
-        bot.reply_to(message,bot_answer)
-        log(message)
-        logger.info(f"Bot: {bot_answer}")
-        log_file.write(f"Bot: {bot_answer}\n")
-        return
     
     if len(name) > MAX_CHARS:
         bot_answer = f"Riesegui il comando usando meno caratteri. max: {MAX_CHARS}"
@@ -159,6 +151,9 @@ def reset_botname(message, us_id, bypass=False):
     else:
         bot_answer = "Utente non trovato"
     bot.reply_to(message,bot_answer)
+    log(message)
+    logger.info(f"Bot: {bot_answer}")
+    log_file.write(f"Bot: {bot_answer}\n")
 
 def get_botname(us_id):
     user_doc = users_table.search(User.user_id == us_id)
@@ -383,15 +378,8 @@ def set_name(message):
 
 @bot.message_handler(commands=["resetname"])
 def reset_name(message):
-    bot_answer = "Nome resettato"
     user = message.from_user
-    log_file = open(f"{log_path}/{user.id}.txt","a")
-
     reset_botname(message,user.id)
-
-    log(message)
-    logger.info(f"Bot: {bot_answer}")
-    log_file.write(f"Bot: {bot_answer}\n")
 
 @bot.message_handler(commands=["sendtogiu"])
 def send_to_giu(message):
