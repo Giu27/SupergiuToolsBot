@@ -137,6 +137,29 @@ def set_botname(message, us_id):
     logger.info(f"Bot: {bot_answer}")
     log_file.write(f"Bot: {bot_answer}\n")
 
+def reset_botname(message, us_id, bypass=False):
+    user = message.from_user
+    log_file = open(f"{log_path}/{user.id}.txt","a")
+    current_permission = get_permission(user.id)
+
+    if not current_permission and not bypass:
+        bot_answer = "Non hai il permesso di usare questo comando"
+        bot.reply_to(message,bot_answer)
+        log(message)
+        logger.info(f"Bot: {bot_answer}")
+        log_file.write(f"Bot: {bot_answer}\n")
+        return
+    
+    user_doc = users_table.search(User.user_id == us_id)
+    if user_doc:
+        target_name = user_doc[0]["first_name"]
+        user_data = {"bot_name" : None}
+        users_table.upsert(user_data, User.user_id == us_id)
+        bot_answer = f"Nome di {target_name} resettato!"
+    else:
+        bot_answer = "Utente non trovato"
+    bot.reply_to(message,bot_answer)
+
 def get_botname(us_id):
     user_doc = users_table.search(User.user_id == us_id)
     if user_doc: return user_doc[0]["bot_name"]
@@ -277,8 +300,8 @@ def choose_text(message,command):
         log_file.write(f"Bot: {bot_answer}\n")
         return
     
-    if command == set_permission:
-        set_permission(message,int(message.text))
+    if command == set_permission or command == reset_botname:
+        command(message,int(message.text))
         return
 
     bot.reply_to(message, bot_answer)
@@ -359,25 +382,13 @@ def set_name(message):
     log_file.write(f"Bot: {bot_answer}\n")
 
 @bot.message_handler(commands=["resetname"])
-def reset_name(message,bypass=False):
+def reset_name(message):
     bot_answer = "Nome resettato"
     user = message.from_user
     log_file = open(f"{log_path}/{user.id}.txt","a")
 
-    current_permission = get_permission(user.id)
-    if not current_permission and not bypass:
-        bot_answer = "Non hai il permesso di usare questo comando"
-        bot.reply_to(message,bot_answer)
-        log(message)
-        logger.info(f"Bot: {bot_answer}")
-        log_file.write(f"Bot: {bot_answer}\n")
-        return
-    
-    botname = get_botname(user.id)
-    if botname:
-        user_doc = users_table.search(User.user_id == user.id)
-        user_doc[0]["bot_name"] = None
-    bot.reply_to(message,bot_answer)
+    reset_botname(message,user.id)
+
     log(message)
     logger.info(f"Bot: {bot_answer}")
     log_file.write(f"Bot: {bot_answer}\n")
@@ -439,6 +450,10 @@ def set_person_permission(message):
 @bot.message_handler(commands=["setpersonsentence"])
 def set_person_sentence(message):
     choose_target(message, set_excl_sentence)
+
+@bot.message_handler(commands=["resetpersonname"])
+def reset_person_name(message):
+    choose_target(message, reset_botname)
 
 @bot.message_handler(commands=["getids"])
 def get_ids(message):
@@ -567,7 +582,8 @@ def log(message):
     botname = get_botname(user.id)
     if botname: 
         if check_banned_name(botname):
-            reset_name(message,True)
+            reset_botname(message,user.id,True)
+            botname = None
     store_user_data(user,botname,message.chat.id,current_permission,current_sentence)
     if user.username: user_info = user.username
     else: user_info = f"{user.first_name} {user.last_name}"
