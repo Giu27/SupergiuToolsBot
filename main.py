@@ -1,4 +1,4 @@
-import telebot, os, logging, json, wikipedia, random
+import telebot, os, logging, json, wikipedia, random, faker, unidecode
 from dotenv import load_dotenv
 from tinydb import TinyDB, Query
 from telebot import types
@@ -38,7 +38,9 @@ commands = [
     types.BotCommand("setname","Modifica il tuo nome"),
     types.BotCommand("resetname","Ripristina il tuo nome originale"),
     types.BotCommand("sendtogiu","Invia un messaggio a Supergiu"),
-    types.BotCommand("eventstoday","Restituisce curiosità storiche sulla data di oggi")
+    types.BotCommand("eventstoday","Restituisce curiosità storiche sulla data di oggi"),
+    types.BotCommand("randomnumber","Restituisce un numero casuale tra 0 e 999"),
+    types.BotCommand("randomname","Imposta un nome casuale")
 ]
 
 def store_user_data(user, bot_name, chat_id,cmd_perm,excl_sen):
@@ -86,27 +88,40 @@ def check_banned_name(name):
     for word in ultra_banned_words:
         if word in wordname: return True
 
-def set_botname(message, us_id):
+def logging_procedure(message,bot_answer,log_file):
+    """Procedura standard di log in tutte le funzioni"""
+    log(message)
+    logger.info(f"Bot: {bot_answer}")
+    log_file.write(f"Bot: {bot_answer}\n")
+
+def generate_random_name():
+    langs = ["it_IT", "en_UK", "fr_Fr","uk_UA","el_GR","ja_JP"]
+    lang = random.choice(langs)
+    fake = faker.Faker(lang)
+    if lang == "ja_JP":
+        name = fake.first_romanized_name()
+    else:
+        name = fake.first_name()
+        name = unidecode.unidecode(name)
+    return name
+
+def set_botname(message, us_id, randomName=False):
     MAX_CHARS = 200
     user = message.from_user
     name = message.text
-    current_permission = get_permission(user.id)
+    if randomName: name = generate_random_name()
     log_file = open(f"{log_path}/{user.id}.txt","a")
     
     if len(name) > MAX_CHARS:
         bot_answer = f"Riesegui il comando usando meno caratteri. max: {MAX_CHARS}"
         bot.reply_to(message,bot_answer)
-        log(message)
-        logger.info(f"Bot: {bot_answer}")
-        log_file.write(f"Bot: {bot_answer}\n")
+        logging_procedure(message,bot_answer,log_file)
         return
     
     if check_banned_name(name):
         bot_answer = f"Riesegui il comando usando un nome consentito"
         bot.reply_to(message,bot_answer)
-        log(message)
-        logger.info(f"Bot: {bot_answer}")
-        log_file.write(f"Bot: {bot_answer}\n")
+        logging_procedure(message,bot_answer,log_file)
         return
     
     user_doc = users_table.search(User.user_id == us_id)
@@ -125,9 +140,7 @@ def set_botname(message, us_id):
 
     else: bot_answer = "Utente non trovato"
     bot.reply_to(message,bot_answer)
-    log(message)
-    logger.info(f"Bot: {bot_answer}")
-    log_file.write(f"Bot: {bot_answer}\n")
+    logging_procedure(message,bot_answer,log_file)
 
 def reset_botname(message, us_id, bypass=False):
     user = message.from_user
@@ -151,13 +164,18 @@ def reset_botname(message, us_id, bypass=False):
     else:
         bot_answer = "Utente non trovato"
     bot.reply_to(message,bot_answer)
-    log(message)
-    logger.info(f"Bot: {bot_answer}")
-    log_file.write(f"Bot: {bot_answer}\n")
+    logging_procedure(message,bot_answer,log_file)
 
 def get_botname(us_id):
     user_doc = users_table.search(User.user_id == us_id)
-    if user_doc: return user_doc[0]["bot_name"]
+    if user_doc: 
+        botname = user_doc[0]["bot_name"]
+        if botname: 
+            if check_banned_name(botname):
+                botname = None
+                user_data = {"bot_name" : None}
+                users_table.upsert(user_data, User.user_id == us_id)
+        return botname
     else: return None
 
 def set_permission(message,us_id):
@@ -176,9 +194,7 @@ def set_permission(message,us_id):
         }
     users_table.upsert(user_data, User.user_id == us_id)
     bot.reply_to(message, bot_answer)
-    log(message)
-    logger.info(f"Bot: {bot_answer}")
-    log_file.write(f"Bot: {bot_answer}\n")
+    logging_procedure(message,bot_answer,log_file)
 
 def get_permission(us_id):
     user_doc = users_table.search(User.user_id == us_id)
@@ -237,9 +253,7 @@ def set_excl_sentence(message, us_id):
 
     else: bot_answer = "Utente non trovato"
     bot.reply_to(message,bot_answer)
-    log(message)
-    logger.info(f"Bot: {bot_answer}")
-    log_file.write(f"Bot: {bot_answer}\n")
+    logging_procedure(message,bot_answer,log_file)
 
 def get_excl_sentence(us_id):
     user_doc = users_table.search(User.user_id == us_id)
@@ -259,9 +273,7 @@ def send_message(message, chat_id):
     message_to_send = f"Da: {viewed_name}:\n{message.text}"
     bot.send_message(chat_id,message_to_send)
     bot.reply_to(message,bot_answer)
-    log(message)
-    logger.info(f"Bot: {bot_answer}")
-    log_file.write(f"Bot: {bot_answer}\n")
+    logging_procedure(message,bot_answer,log_file)
 
 def broadcast(message):
     user = message.from_user
@@ -276,9 +288,7 @@ def broadcast(message):
             if user["chat_id"]:
                 bot.send_message(user["chat_id"], bot_answer)
         except KeyError: pass
-    log(message)
-    logger.info(f"Bot: {bot_answer}")
-    log_file.write(f"Bot: {bot_answer}\n")
+    logging_procedure(message,bot_answer,log_file)
 
 def choose_text(message,command):
     user = message.from_user
@@ -301,9 +311,7 @@ def choose_text(message,command):
 
     bot.reply_to(message, bot_answer)
     bot.register_next_step_handler(message, command, us_id)
-    log(message)
-    logger.info(f"Bot: {bot_answer}")
-    log_file.write(f"Bot: {bot_answer}\n")
+    logging_procedure(message,bot_answer,log_file)
 
 def choose_target(message,command):
     user = message.from_user
@@ -321,9 +329,7 @@ def choose_target(message,command):
 
     bot.reply_to(message, bot_answer)
     bot.register_next_step_handler(message, choose_text,command)
-    log(message)
-    logger.info(f"Bot: {bot_answer}")
-    log_file.write(f"Bot: {bot_answer}\n")
+    logging_procedure(message,bot_answer,log_file)
 
 bot.set_my_commands(commands)
 
@@ -338,7 +344,6 @@ if not DEV_MODE:
 
 @bot.message_handler(commands=["start","ciao"])
 def send_welcome(message):
-    log(message)
     user = message.from_user
     log_file = open(f"{log_path}/{user.id}.txt","a")
     if get_botname(user.id): viewed_name = get_botname(user.id)
@@ -352,8 +357,7 @@ def send_welcome(message):
     except KeyError: pass
 
     bot.reply_to(message,bot_answer)
-    logger.info(f"Bot: {bot_answer}")
-    log_file.write(f"Bot: {bot_answer}\n")
+    logging_procedure(message,bot_answer,log_file)
 
 @bot.message_handler(commands=["setname"])
 def set_name(message):
@@ -365,16 +369,12 @@ def set_name(message):
     if not current_permission:
         bot_answer = "Non hai il permesso di usare questo comando"
         bot.reply_to(message,bot_answer)
-        log(message)
-        logger.info(f"Bot: {bot_answer}")
-        log_file.write(f"Bot: {bot_answer}\n")
+        logging_procedure(message,bot_answer,log_file)
         return
     
     bot.reply_to(message, bot_answer)
     bot.register_next_step_handler(message,set_botname,user.id)
-    log(message)
-    logger.info(f"Bot: {bot_answer}")
-    log_file.write(f"Bot: {bot_answer}\n")
+    logging_procedure(message,bot_answer,log_file)
 
 @bot.message_handler(commands=["resetname"])
 def reset_name(message):
@@ -395,16 +395,12 @@ def send_to_giu(message):
     if not current_permission:
         bot_answer = "Non hai il permesso di usare questo comando"
         bot.reply_to(message,bot_answer)
-        log(message)
-        logger.info(f"Bot: {bot_answer}")
-        log_file.write(f"Bot: {bot_answer}\n")
+        logging_procedure(message,bot_answer,log_file)
         return
     
     bot.reply_to(message, bot_answer)
     bot.register_next_step_handler(message,send_message,GIU_ID)
-    log(message)
-    logger.info(f"Bot: {bot_answer}")
-    log_file.write(f"Bot: {bot_answer}\n")
+    logging_procedure(message,bot_answer,log_file)
 
 @bot.message_handler(commands=["eventstoday"])
 def events_on_wikipedia(message):
@@ -423,10 +419,21 @@ def events_on_wikipedia(message):
     except wikipedia.exceptions.PageError:
         bot_answer = "pagina non trovata"
     bot.reply_to(message,bot_answer)
-    log(message)
-    logger.info(f"Bot: {bot_answer}")
-    log_file.write(f"Bot: {bot_answer}\n")
-        
+    logging_procedure(message,bot_answer,log_file)
+
+@bot.message_handler(commands=["randomnumber"])
+def random_number(message):
+    user = message.from_user
+    log_file = open(f"{log_path}/{user.id}.txt","a")
+    bot_answer = random.randrange(0,999)
+    bot.reply_to(message,bot_answer)
+    logging_procedure(message,bot_answer,log_file)
+
+@bot.message_handler(commands=["randomname"])
+def random_name(message):
+    user = message.from_user
+    set_botname(message,user.id,True)
+
 @bot.message_handler(commands=["setpersonname"])
 def set_person_name(message):
     choose_target(message, set_botname)
@@ -453,21 +460,17 @@ def get_ids(message):
     if not current_permission or user.id != GIU_ID:
         bot_answer = "Non hai il permesso di usare questo comando"
         bot.reply_to(message,bot_answer)
-        log(message)
-        logger.info(f"Bot: {bot_answer}")
-        log_file.write(f"Bot: {bot_answer}\n")
+        logging_procedure(message,bot_answer,log_file)
         return
     
     for user in users_table:
         try: 
             if user["user_id"]:
-                bot_answer += f"{user["user_id"]}: {user["first_name"]} {user["last_name"]}\nBotname: {user["bot_name"]}\n\n"
+                bot_answer += f"{user["user_id"]}: {user["first_name"]} {user["last_name"]}\nBotname: {get_botname(user["user_id"])}\n\n"
         except KeyError: pass
 
     bot.reply_to(message,bot_answer)
-    log(message)
-    logger.info(f"Bot: {bot_answer}")
-    log_file.write(f"Bot: {bot_answer}\n")
+    logging_procedure(message,bot_answer,log_file)
 
 @bot.message_handler(commands=["sendto"])
 def send_to_target(message):
@@ -483,16 +486,12 @@ def send_in_broadcast(message):
     if not current_permission or user.id != GIU_ID:
         bot_answer = "Non hai il permesso di usare questo comando"
         bot.reply_to(message,bot_answer)
-        log(message)
-        logger.info(f"Bot: {bot_answer}")
-        log_file.write(f"Bot: {bot_answer}\n")
+        logging_procedure(message,bot_answer,log_file)
         return
     
     bot.reply_to(message, bot_answer)
     bot.register_next_step_handler(message,broadcast)
-    log(message)
-    logger.info(f"Bot: {bot_answer}")
-    log_file.write(f"Bot: {bot_answer}\n")
+    logging_procedure(message,bot_answer,log_file)
     
 @bot.message_handler(commands=["francescosegreto"])
 def set_owner_name(message):
@@ -508,16 +507,12 @@ def set_owner_name(message):
     if not current_permission:
         bot_answer = "Non hai il permesso di usare questo comando"
         bot.reply_to(message,bot_answer)
-        log(message)
-        logger.info(f"Bot: {bot_answer}")
-        log_file.write(f"Bot: {bot_answer}\n")
+        logging_procedure(message,bot_answer,log_file)
         return
     
     bot.reply_to(message, bot_answer)
     bot.register_next_step_handler(message,set_botname,GIU_ID)
-    log(message)
-    logger.info(f"Bot: {bot_answer}")
-    log_file.write(f"Bot: {bot_answer}\n")
+    logging_procedure(message,bot_answer,log_file)
 
 @bot.message_handler(commands=["francescovieri"])
 def set_owner_permission(message):
@@ -528,9 +523,7 @@ def set_owner_permission(message):
     if not current_permission:
         bot_answer = "Non hai il permesso di usare questo comando"
         bot.reply_to(message,bot_answer)
-        log(message)
-        logger.info(f"Bot: {bot_answer}")
-        log_file.write(f"Bot: {bot_answer}\n")
+        logging_procedure(message,bot_answer,log_file)
         return
     
     set_permission(message,GIU_ID)
@@ -549,16 +542,12 @@ def set_owner_sentence(message):
     if not current_permission:
         bot_answer = "Non hai il permesso di usare questo comando"
         bot.reply_to(message,bot_answer)
-        log(message)
-        logger.info(f"Bot: {bot_answer}")
-        log_file.write(f"Bot: {bot_answer}\n")
+        logging_procedure(message,bot_answer,log_file)
         return
     
     bot.reply_to(message, bot_answer)
     bot.register_next_step_handler(message,set_excl_sentence,GIU_ID)
-    log(message)
-    logger.info(f"Bot: {bot_answer}")
-    log_file.write(f"Bot: {bot_answer}\n")
+    logging_procedure(message,bot_answer,log_file)
 
 @bot.message_handler(func= lambda commands:True)
 def log(message):
@@ -568,10 +557,6 @@ def log(message):
     current_sentence = get_excl_sentence(user.id)
     if current_permission == None: current_permission = True
     botname = get_botname(user.id)
-    if botname: 
-        if check_banned_name(botname):
-            reset_botname(message,user.id,True)
-            botname = None
     store_user_data(user,botname,message.chat.id,current_permission,current_sentence)
     if user.username: user_info = user.username
     else: user_info = f"{user.first_name} {user.last_name}"
