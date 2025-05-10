@@ -40,10 +40,11 @@ commands = [
     types.BotCommand("sendtogiu","Invia un messaggio a Supergiu"),
     types.BotCommand("eventstoday","Restituisce curiosità storiche sulla data di oggi"),
     types.BotCommand("randomnumber","Restituisce un numero casuale tra 0 e 999"),
-    types.BotCommand("randomname","Imposta un nome casuale")
+    types.BotCommand("randomname","Imposta un nome casuale"),
+    types.BotCommand("notifications","Attiva/Disattiva le notifiche")
 ]
 
-def store_user_data(user, bot_name, chat_id,cmd_perm,excl_sen):
+def store_user_data(user, bot_name, chat_id,cmd_perm,excl_sen, notif):
     user_data = {
         "user_id" : user.id,
         "first_name" : user.first_name,
@@ -53,7 +54,8 @@ def store_user_data(user, bot_name, chat_id,cmd_perm,excl_sen):
         "bot_name" : bot_name,
         "chat_id" : chat_id,
         "can_use_commands" : cmd_perm,
-        "exclusive_sentence" : excl_sen
+        "exclusive_sentence" : excl_sen,
+        "notifications" : notif
         }
     users_table.upsert(user_data, User.user_id == user.id)
 
@@ -205,6 +207,15 @@ def get_permission(us_id):
             return None
     return None
 
+def get_notification_status(us_id):
+    user_doc = users_table.search(User.user_id == us_id)
+    if user_doc: 
+        try: 
+            return user_doc[0]["notifications"]
+        except KeyError:
+            return None
+    return None
+
 def set_excl_sentence(message, us_id):
     MAX_CHARS = 200
     user = message.from_user
@@ -337,7 +348,7 @@ if not DEV_MODE:
     for user in users_table:
         bot_answer = "Il bot è online!"
         try: 
-            if user["chat_id"]:
+            if user["chat_id"] and get_notification_status(user["user_id"]):
                 bot.send_message(user["chat_id"], bot_answer)
                 logger.info(f"Bot: {bot_answer}. chat_id: {user["chat_id"]}")
         except KeyError: pass
@@ -432,7 +443,30 @@ def random_number(message):
 @bot.message_handler(commands=["randomname"])
 def random_name(message):
     user = message.from_user
+    log_file = open(f"{log_path}/{user.id}.txt","a")
+    current_permission = get_permission(user.id)
+    if not current_permission:
+        bot_answer = "Non hai il permesso di usare questo comando"
+        bot.reply_to(message,bot_answer)
+        logging_procedure(message,bot_answer,log_file)
+        return
     set_botname(message,user.id,True)
+
+@bot.message_handler(commands=["notifications"])
+def set_notifications(message):
+    user = message.from_user
+    log_file = open(f"{log_path}/{user.id}.txt","a")
+    
+    if get_notification_status(user.id):
+        bot_answer = "Notifiche disattivate"
+    else:
+        bot_answer = "Notifiche attivate"
+
+    user_data = {"notifications" : not get_notification_status(user.id)}
+    users_table.upsert(user_data, User.user_id == user.id)
+    bot.reply_to(message,bot_answer)
+
+    logging_procedure(message,bot_answer,log_file)
 
 @bot.message_handler(commands=["setpersonname"])
 def set_person_name(message):
@@ -555,9 +589,11 @@ def log(message):
     log_file = open(f"{log_path}/{user.id}.txt","a")
     current_permission = get_permission(user.id)
     current_sentence = get_excl_sentence(user.id)
+    current_notification = get_notification_status(user.id)
     if current_permission == None: current_permission = True
+    if current_notification == None: current_notification = True
     botname = get_botname(user.id)
-    store_user_data(user,botname,message.chat.id,current_permission,current_sentence)
+    store_user_data(user,botname,message.chat.id,current_permission,current_sentence,current_notification)
     if user.username: user_info = user.username
     else: user_info = f"{user.first_name} {user.last_name}"
     logger.info(f"{user.id}, {user_info}: {message.text}")
@@ -569,7 +605,7 @@ if not DEV_MODE:
     for user in users_table:
         bot_answer = "Il bot è offline!"
         try: 
-            if user["chat_id"]:
+            if user["chat_id"] and get_notification_status(user["user_id"]):
                 bot.send_message(user["chat_id"], bot_answer)
                 logger.info(f"Bot: {bot_answer}. chat_id: {user["chat_id"]}")
         except KeyError: pass
