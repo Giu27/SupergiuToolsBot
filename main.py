@@ -6,7 +6,7 @@ from datetime import date
 
 load_dotenv()
 
-DEV_MODE = False
+DEV_MODE = True
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 GIU_ID = int(os.environ.get("GIU_ID"))
 bot = telebot.TeleBot(BOT_TOKEN)
@@ -14,24 +14,11 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 log_path = "logs"
 
-db = TinyDB("User_info.JSON")
+db = TinyDB("Bot_DB.JSON")
 users_table = db.table("users")
+banned_words_table = db.table("banned_words")
 User = Query()
-
-banned_words_str = os.environ.get("banned_words")
-ultra_banned_words_str = os.environ.get("ultra_banned_words")
-banned_words = []
-ultra_banned_words = []
-
-if banned_words_str:
-    try:
-        banned_words = json.loads(banned_words_str)
-    except json.JSONDecodeError: print("ERRORE CARICAMENTO PAROLE VIETATE")
-
-if ultra_banned_words_str:
-    try:
-        ultra_banned_words = json.loads(ultra_banned_words_str)
-    except json.JSONDecodeError: print("ERRORE CARICAMENTO PAROLE ULTRA VIETATE")
+Word_type = Query()
 
 commands = [
     types.BotCommand("ciao","Saluta l'utente "),
@@ -60,6 +47,8 @@ def store_user_data(user, bot_name, chat_id,cmd_perm,excl_sen, notif):
     users_table.upsert(user_data, User.user_id == user.id)
 
 def check_banned_name(name):
+    banned_words = get_banned_words()
+    ultra_banned_words = get_ultra_banned_words()
     numToCh = {'1' : 'i','3' : 'e','4' : 'r', '0' : 'o', '7' : 'l', '5' : 's','$': 'e','€':'e','т' : 't','п' : 'n'}
     numToCh2 = {'1' : 'i','3' : 'e','4' : 'a', '0' : 'o', '7' : 'l', '5' : 's','$': 'e','€':'e','т' : 't','п' : 'n'}
     wordname = ""
@@ -342,6 +331,60 @@ def choose_target(message,command):
     bot.register_next_step_handler(message, choose_text,command)
     logging_procedure(message,bot_answer,log_file)
 
+def update_banned_words(message, type):
+    word = (message.text).lower()
+    user = message.from_user
+    log_file = open(f"{log_path}/{user.id}.txt","a")
+    if type == "banned":
+        banned_doc = banned_words_table.search(Word_type.type == "banned")
+        if banned_doc:
+            banned_list = banned_doc[0]["list"]
+            if word in banned_list:
+                bot_answer = "Parola già bannata"
+                bot.reply_to(message,bot_answer)
+                logging_procedure(message,bot_answer,log_file)
+                return
+            banned_list.append(word)
+            list_data = {"list":banned_list, "type" : "banned"}
+            banned_words_table.upsert(list_data, Word_type.type == "banned")
+        else:
+            banned_list = []
+            banned_list.append(word)
+            list_data = {"list":banned_list, "type" : "banned"}
+            banned_words_table.upsert(list_data, Word_type.type == "banned")
+    else:
+        banned_doc = banned_words_table.search(Word_type.type == "ultrabanned")
+        if banned_doc:
+            banned_list = banned_doc[0]["list"]
+            if word in banned_list:
+                bot_answer = "Parola già bannata"
+                bot.reply_to(message,bot_answer)
+                logging_procedure(message,bot_answer,log_file)
+                return
+            banned_list.append(word)
+            list_data = {"list":banned_list, "type" : "ultrabanned"}
+            banned_words_table.upsert(list_data, Word_type.type == "ultrabanned")
+        else:
+            banned_list = []
+            banned_list.append(word)
+            list_data = {"list":banned_list, "type" : "ultrabanned"}
+            banned_words_table.upsert(list_data, Word_type.type == "ultrabanned")
+    bot_answer = f"{word} bannata"
+    bot.reply_to(message,bot_answer)
+    logging_procedure(message,bot_answer,log_file)
+
+def get_banned_words():
+    banned_doc = banned_words_table.search(Word_type.type == "banned")
+    if banned_doc: banned_list = banned_doc[0]["list"]
+    else: banned_list = []
+    return banned_list
+
+def get_ultra_banned_words():
+    banned_doc = banned_words_table.search(Word_type.type == "ultrabanned")
+    if banned_doc: banned_list = banned_doc[0]["list"]
+    else: banned_list = []
+    return banned_list
+
 bot.set_my_commands(commands)
 
 if not DEV_MODE:
@@ -526,7 +569,41 @@ def send_in_broadcast(message):
     bot.reply_to(message, bot_answer)
     bot.register_next_step_handler(message,broadcast)
     logging_procedure(message,bot_answer,log_file)
+
+@bot.message_handler(commands=["addbanned"])
+def add_banned_word(message):
+    user = message.from_user
+    log_file = open(f"{log_path}/{user.id}.txt","a")
+    bot_answer = "Che parola vuoi vietare?"
+
+    current_permission = get_permission(user.id)
+    if not current_permission or user.id != GIU_ID:
+        bot_answer = "Non hai il permesso di usare questo comando"
+        bot.reply_to(message,bot_answer)
+        logging_procedure(message,bot_answer,log_file)
+        return
     
+    bot.reply_to(message, bot_answer)
+    bot.register_next_step_handler(message,update_banned_words,"banned")
+    logging_procedure(message,bot_answer,log_file)
+
+@bot.message_handler(commands=["addultrabanned"])
+def add_ultra_banned_word(message):
+    user = message.from_user
+    log_file = open(f"{log_path}/{user.id}.txt","a")
+    bot_answer = "Che parola vuoi iper vietare?"
+
+    current_permission = get_permission(user.id)
+    if not current_permission or user.id != GIU_ID:
+        bot_answer = "Non hai il permesso di usare questo comando"
+        bot.reply_to(message,bot_answer)
+        logging_procedure(message,bot_answer,log_file)
+        return
+    
+    bot.reply_to(message, bot_answer)
+    bot.register_next_step_handler(message,update_banned_words,"ultrabanned")
+    logging_procedure(message,bot_answer,log_file)
+
 @bot.message_handler(commands=["francescosegreto"])
 def set_owner_name(message):
     user = message.from_user
@@ -609,3 +686,5 @@ if not DEV_MODE:
                 bot.send_message(user["chat_id"], bot_answer)
                 logger.info(f"Bot: {bot_answer}. chat_id: {user["chat_id"]}")
         except KeyError: pass
+
+db.close()
