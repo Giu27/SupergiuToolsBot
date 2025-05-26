@@ -1,4 +1,4 @@
-import telebot, os, logging, json, wikipedia, random, faker, unidecode
+import telebot, os, logging, qrcode, wikipedia, random, faker, unidecode
 from dotenv import load_dotenv
 from tinydb import TinyDB, Query
 from telebot import types
@@ -6,7 +6,7 @@ from datetime import date
 
 load_dotenv()
 
-DEV_MODE = True
+DEV_MODE = False
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 GIU_ID = int(os.environ.get("GIU_ID"))
 bot = telebot.TeleBot(BOT_TOKEN)
@@ -28,7 +28,8 @@ commands = [
     types.BotCommand("eventstoday","Restituisce curiosità storiche sulla data di oggi"),
     types.BotCommand("randomnumber","Restituisce un numero casuale tra 0 e 999"),
     types.BotCommand("randomname","Imposta un nome casuale"),
-    types.BotCommand("notifications","Attiva/Disattiva le notifiche")
+    types.BotCommand("notifications","Attiva/Disattiva le notifiche"),
+    types.BotCommand("qrcode", "Crea un QR Code di un contenuto testuale inviato")
 ]
 
 def store_user_data(user, bot_name, chat_id,cmd_perm,excl_sen, notif):
@@ -95,6 +96,22 @@ def generate_random_name():
         name = fake.first_name()
         name = unidecode.unidecode(name)
     return name
+
+def generate_qrcode(message,chat_id):
+    user = message.from_user
+    log_file = open(f"{log_path}/{user.id}.txt","a")
+    bot_answer = "Inviato!"
+    img_path = f"qr_{user.id}.png"
+    img = qrcode.make(message.text)
+    img.save(img_path)
+    try:
+        with open(img_path, "rb") as code:
+            bot.send_photo(chat_id,code)
+        os.remove(img_path)
+    except Exception as e:
+        bot_answer = f"errore, per favore invia questo a Giu: \n{e}"
+    bot.reply_to(message, bot_answer)
+    logging_procedure(message,bot_answer,log_file)
 
 def set_botname(message, us_id, randomName=False):
     MAX_CHARS = 200
@@ -167,6 +184,14 @@ def get_botname(us_id):
                 user_data = {"bot_name" : None}
                 users_table.upsert(user_data, User.user_id == us_id)
         return botname
+    else: return None
+
+def get_chat_id(us_id):
+    user_doc = users_table.search(User.user_id == us_id)
+    if user_doc: 
+        ch_id = user_doc[0]["chat_id"]
+        if ch_id: return ch_id
+        else: return None
     else: return None
 
 def set_permission(message,us_id):
@@ -509,6 +534,16 @@ def set_notifications(message):
     users_table.upsert(user_data, User.user_id == user.id)
     bot.reply_to(message,bot_answer)
 
+    logging_procedure(message,bot_answer,log_file)
+
+@bot.message_handler(commands=["qrcode"])
+def request_qrcode(message):
+    user = message.from_user
+    chat_id = get_chat_id(user.id)
+    log_file = open(f"{log_path}/{user.id}.txt","a")
+    bot_answer = "Inviami del testo e genererò un QR code"
+    bot.reply_to(message,bot_answer)
+    bot.register_next_step_handler(message, generate_qrcode,chat_id)
     logging_procedure(message,bot_answer,log_file)
 
 @bot.message_handler(commands=["setpersonname"])
