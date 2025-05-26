@@ -541,6 +541,13 @@ def request_qrcode(message):
     user = message.from_user
     chat_id = get_chat_id(user.id)
     log_file = open(f"{log_path}/{user.id}.txt","a")
+    current_permission = get_permission(user.id)
+    if not current_permission:
+        bot_answer = "Non hai il permesso di usare questo comando"
+        bot.reply_to(message,bot_answer)
+        logging_procedure(message,bot_answer,log_file)
+        return
+    
     bot_answer = "Inviami del testo e genererò un QR code"
     bot.reply_to(message,bot_answer)
     bot.register_next_step_handler(message, generate_qrcode,chat_id)
