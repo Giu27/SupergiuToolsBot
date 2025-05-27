@@ -93,6 +93,16 @@ def permission_denied_procedure(message):
     bot.reply_to(message,bot_answer)
     logging_procedure(message,bot_answer,log_file)
 
+def send_on_off_notification(status):
+    if not DEV_MODE:
+        for user in users_table:
+            bot_answer = f"Il bot è {status}!"
+            try: 
+                if user["chat_id"] and get_notification_status(user["user_id"]):
+                    bot.send_message(user["chat_id"], bot_answer)
+                    logger.info(f"Bot: {bot_answer}. chat_id: {user["chat_id"]}")
+            except KeyError: pass
+
 def generate_random_name():
     langs = ["it_IT", "en_UK", "fr_Fr","uk_UA","el_GR","ja_JP"]
     lang = random.choice(langs)
@@ -389,14 +399,7 @@ def get_ultra_banned_words():
 
 bot.set_my_commands(commands)
 
-if not DEV_MODE:
-    for user in users_table:
-        bot_answer = "Il bot è online!"
-        try: 
-            if user["chat_id"] and get_notification_status(user["user_id"]):
-                bot.send_message(user["chat_id"], bot_answer)
-                logger.info(f"Bot: {bot_answer}. chat_id: {user["chat_id"]}")
-        except KeyError: pass
+send_on_off_notification("online")
 
 @bot.message_handler(commands=["start","ciao"])
 def send_welcome(message):
@@ -680,13 +683,6 @@ def log(message):
     
 bot.infinity_polling()
 
-if not DEV_MODE:
-    for user in users_table:
-        bot_answer = "Il bot è offline!"
-        try: 
-            if user["chat_id"] and get_notification_status(user["user_id"]):
-                bot.send_message(user["chat_id"], bot_answer)
-                logger.info(f"Bot: {bot_answer}. chat_id: {user["chat_id"]}")
-        except KeyError: pass
+send_on_off_notification("offline")
 
 db.close()
