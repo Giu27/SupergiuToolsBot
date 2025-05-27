@@ -86,6 +86,13 @@ def logging_procedure(message,bot_answer,log_file):
     logger.info(f"Bot: {bot_answer}")
     log_file.write(f"Bot: {bot_answer}\n")
 
+def permission_denied_procedure(message):
+    user = message.from_user
+    log_file = open(f"{log_path}/{user.id}.txt","a")
+    bot_answer = "Non hai il permesso di usare questo comando"
+    bot.reply_to(message,bot_answer)
+    logging_procedure(message,bot_answer,log_file)
+
 def generate_random_name():
     langs = ["it_IT", "en_UK", "fr_Fr","uk_UA","el_GR","ja_JP"]
     lang = random.choice(langs)
@@ -150,18 +157,9 @@ def set_botname(message, us_id, randomName=False):
     bot.reply_to(message,bot_answer)
     logging_procedure(message,bot_answer,log_file)
 
-def reset_botname(message, us_id, bypass=False):
+def reset_botname(message, us_id):
     user = message.from_user
     log_file = open(f"{log_path}/{user.id}.txt","a")
-    current_permission = get_permission(user.id)
-
-    if not current_permission and not bypass:
-        bot_answer = "Non hai il permesso di usare questo comando"
-        bot.reply_to(message,bot_answer)
-        log(message)
-        logger.info(f"Bot: {bot_answer}")
-        log_file.write(f"Bot: {bot_answer}\n")
-        return
     
     user_doc = users_table.search(User.user_id == us_id)
     if user_doc:
@@ -234,31 +232,18 @@ def set_excl_sentence(message, us_id):
     MAX_CHARS = 200
     user = message.from_user
     sentence = message.text
-    current_permission = get_permission(user.id)
     log_file = open(f"{log_path}/{user.id}.txt","a")
-
-    if not current_permission:
-        bot_answer = "Non hai il permesso di usare questo comando"
-        bot.reply_to(message,bot_answer)
-        log(message)
-        logger.info(f"Bot: {bot_answer}")
-        log_file.write(f"Bot: {bot_answer}\n")
-        return
     
     if len(sentence) > MAX_CHARS:
         bot_answer = f"Riesegui il comando usando meno caratteri. max: {MAX_CHARS}"
         bot.reply_to(message,bot_answer)
-        log(message)
-        logger.info(f"Bot: {bot_answer}")
-        log_file.write(f"Bot: {bot_answer}\n")
+        logging_procedure(message, bot_answer,log_file)
         return
     
     if check_banned_name(sentence):
         bot_answer = f"Riesegui il comando usando una frase con termini consentiti"
         bot.reply_to(message,bot_answer)
-        log(message)
-        logger.info(f"Bot: {bot_answer}")
-        log_file.write(f"Bot: {bot_answer}\n")
+        logging_procedure(message, bot_answer,log_file)
         return
     
     user_doc = users_table.search(User.user_id == us_id)
@@ -295,7 +280,7 @@ def send_message(message, chat_id):
     bot_answer = "Inviato!"
     if get_botname(user.id): viewed_name = get_botname(user.id)
     else: viewed_name = user.first_name
-    message_to_send = f"Da: {viewed_name}:\n{message.text}"
+    message_to_send = f"Da: {viewed_name}({user.id}):\n{message.text}"
     bot.send_message(chat_id,message_to_send)
     bot.reply_to(message,bot_answer)
     logging_procedure(message,bot_answer,log_file)
@@ -323,11 +308,7 @@ def choose_text(message,command):
 
     current_permission = get_permission(user.id)
     if not current_permission or user.id != GIU_ID:
-        bot_answer = "Non hai il permesso di usare questo comando"
-        bot.reply_to(message,bot_answer)
-        log(message)
-        logger.info(f"Bot: {bot_answer}")
-        log_file.write(f"Bot: {bot_answer}\n")
+        permission_denied_procedure(message)
         return
     
     if command == set_permission or command == reset_botname:
@@ -345,11 +326,7 @@ def choose_target(message,command):
 
     current_permission = get_permission(user.id)
     if not current_permission or user.id != GIU_ID:
-        bot_answer = "Non hai il permesso di usare questo comando"
-        bot.reply_to(message,bot_answer)
-        log(message)
-        logger.info(f"Bot: {bot_answer}")
-        log_file.write(f"Bot: {bot_answer}\n")
+        permission_denied_procedure(message)
         return
 
     bot.reply_to(message, bot_answer)
@@ -446,9 +423,7 @@ def set_name(message):
 
     current_permission = get_permission(user.id)
     if not current_permission:
-        bot_answer = "Non hai il permesso di usare questo comando"
-        bot.reply_to(message,bot_answer)
-        logging_procedure(message,bot_answer,log_file)
+        permission_denied_procedure(message)
         return
     
     bot.reply_to(message, bot_answer)
@@ -458,6 +433,11 @@ def set_name(message):
 @bot.message_handler(commands=["resetname"])
 def reset_name(message):
     user = message.from_user
+    current_permission = get_permission(user.id)
+    if not current_permission:
+        permission_denied_procedure(message)
+        return
+    
     reset_botname(message,user.id)
 
 @bot.message_handler(commands=["sendtogiu"])
@@ -472,9 +452,7 @@ def send_to_giu(message):
 
     current_permission = get_permission(user.id)
     if not current_permission:
-        bot_answer = "Non hai il permesso di usare questo comando"
-        bot.reply_to(message,bot_answer)
-        logging_procedure(message,bot_answer,log_file)
+        permission_denied_procedure(message)
         return
     
     bot.reply_to(message, bot_answer)
@@ -511,13 +489,11 @@ def random_number(message):
 @bot.message_handler(commands=["randomname"])
 def random_name(message):
     user = message.from_user
-    log_file = open(f"{log_path}/{user.id}.txt","a")
     current_permission = get_permission(user.id)
     if not current_permission:
-        bot_answer = "Non hai il permesso di usare questo comando"
-        bot.reply_to(message,bot_answer)
-        logging_procedure(message,bot_answer,log_file)
+        permission_denied_procedure(message)
         return
+    
     set_botname(message,user.id,True)
 
 @bot.message_handler(commands=["notifications"])
@@ -543,9 +519,7 @@ def request_qrcode(message):
     log_file = open(f"{log_path}/{user.id}.txt","a")
     current_permission = get_permission(user.id)
     if not current_permission:
-        bot_answer = "Non hai il permesso di usare questo comando"
-        bot.reply_to(message,bot_answer)
-        logging_procedure(message,bot_answer,log_file)
+        permission_denied_procedure(message)
         return
     
     bot_answer = "Inviami del testo e genererò un QR code"
@@ -577,9 +551,7 @@ def get_ids(message):
 
     current_permission = get_permission(user.id)
     if not current_permission or user.id != GIU_ID:
-        bot_answer = "Non hai il permesso di usare questo comando"
-        bot.reply_to(message,bot_answer)
-        logging_procedure(message,bot_answer,log_file)
+        permission_denied_procedure(message)
         return
     
     for user in users_table:
@@ -603,9 +575,7 @@ def send_in_broadcast(message):
 
     current_permission = get_permission(user.id)
     if not current_permission or user.id != GIU_ID:
-        bot_answer = "Non hai il permesso di usare questo comando"
-        bot.reply_to(message,bot_answer)
-        logging_procedure(message,bot_answer,log_file)
+        permission_denied_procedure(message)
         return
     
     bot.reply_to(message, bot_answer)
@@ -620,9 +590,7 @@ def add_banned_word(message):
 
     current_permission = get_permission(user.id)
     if not current_permission or user.id != GIU_ID:
-        bot_answer = "Non hai il permesso di usare questo comando"
-        bot.reply_to(message,bot_answer)
-        logging_procedure(message,bot_answer,log_file)
+        permission_denied_procedure(message)
         return
     
     bot.reply_to(message, bot_answer)
@@ -637,9 +605,7 @@ def add_ultra_banned_word(message):
 
     current_permission = get_permission(user.id)
     if not current_permission or user.id != GIU_ID:
-        bot_answer = "Non hai il permesso di usare questo comando"
-        bot.reply_to(message,bot_answer)
-        logging_procedure(message,bot_answer,log_file)
+        permission_denied_procedure(message)
         return
     
     bot.reply_to(message, bot_answer)
@@ -658,9 +624,7 @@ def set_owner_name(message):
 
     current_permission = get_permission(user.id)
     if not current_permission:
-        bot_answer = "Non hai il permesso di usare questo comando"
-        bot.reply_to(message,bot_answer)
-        logging_procedure(message,bot_answer,log_file)
+        permission_denied_procedure(message)
         return
     
     bot.reply_to(message, bot_answer)
@@ -674,9 +638,7 @@ def set_owner_permission(message):
 
     current_permission = get_permission(user.id)
     if not current_permission:
-        bot_answer = "Non hai il permesso di usare questo comando"
-        bot.reply_to(message,bot_answer)
-        logging_procedure(message,bot_answer,log_file)
+        permission_denied_procedure(message)
         return
     
     set_permission(message,GIU_ID)
@@ -693,9 +655,7 @@ def set_owner_sentence(message):
 
     current_permission = get_permission(user.id)
     if not current_permission:
-        bot_answer = "Non hai il permesso di usare questo comando"
-        bot.reply_to(message,bot_answer)
-        logging_procedure(message,bot_answer,log_file)
+        permission_denied_procedure(message)
         return
     
     bot.reply_to(message, bot_answer)
