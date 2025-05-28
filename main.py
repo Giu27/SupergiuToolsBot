@@ -48,8 +48,8 @@ def store_user_data(user, bot_name, chat_id,cmd_perm,excl_sen, notif):
     users_table.upsert(user_data, User.user_id == user.id)
 
 def check_banned_name(name):
-    banned_words = get_banned_words()
-    ultra_banned_words = get_ultra_banned_words()
+    banned_words = get_banned_words("banned")
+    ultra_banned_words = get_banned_words("ultrabanned")
     numToCh = {'1' : 'i','3' : 'e','4' : 'r', '0' : 'o', '7' : 'l', '5' : 's','$': 'e','€':'e','т' : 't','п' : 'n'}
     numToCh2 = {'1' : 'i','3' : 'e','4' : 'a', '0' : 'o', '7' : 'l', '5' : 's','$': 'e','€':'e','т' : 't','п' : 'n'}
     wordname = ""
@@ -343,56 +343,32 @@ def choose_target(message,command):
     bot.register_next_step_handler(message, choose_text,command)
     logging_procedure(message,bot_answer,log_file)
 
-def update_banned_words(message, type):
+def update_banned_words(message, word_type):
     word = (message.text).lower()
     user = message.from_user
     log_file = open(f"{log_path}/{user.id}.txt","a")
-    if type == "banned":
-        banned_doc = banned_words_table.search(Word_type.type == "banned")
-        if banned_doc:
-            banned_list = banned_doc[0]["list"]
-            if word in banned_list:
-                bot_answer = "Parola già bannata"
-                bot.reply_to(message,bot_answer)
-                logging_procedure(message,bot_answer,log_file)
-                return
-            banned_list.append(word)
-            list_data = {"list":banned_list, "type" : "banned"}
-            banned_words_table.upsert(list_data, Word_type.type == "banned")
-        else:
-            banned_list = []
-            banned_list.append(word)
-            list_data = {"list":banned_list, "type" : "banned"}
-            banned_words_table.upsert(list_data, Word_type.type == "banned")
+    banned_doc = banned_words_table.search(Word_type.type == word_type)
+    if banned_doc:
+        banned_list = banned_doc[0]["list"]
+        if word in banned_list:
+            bot_answer = "Parola già bannata"
+            bot.reply_to(message,bot_answer)
+            logging_procedure(message,bot_answer,log_file)
+            return
+        banned_list.append(word)
+        list_data = {"list":banned_list, "type" : word_type}
+        banned_words_table.upsert(list_data, Word_type.type == word_type)
     else:
-        banned_doc = banned_words_table.search(Word_type.type == "ultrabanned")
-        if banned_doc:
-            banned_list = banned_doc[0]["list"]
-            if word in banned_list:
-                bot_answer = "Parola già bannata"
-                bot.reply_to(message,bot_answer)
-                logging_procedure(message,bot_answer,log_file)
-                return
-            banned_list.append(word)
-            list_data = {"list":banned_list, "type" : "ultrabanned"}
-            banned_words_table.upsert(list_data, Word_type.type == "ultrabanned")
-        else:
-            banned_list = []
-            banned_list.append(word)
-            list_data = {"list":banned_list, "type" : "ultrabanned"}
-            banned_words_table.upsert(list_data, Word_type.type == "ultrabanned")
+        banned_list = []
+        banned_list.append(word)
+        list_data = {"list":banned_list, "type" : word_type}
+        banned_words_table.upsert(list_data, Word_type.type == word_type)
     bot_answer = f"{word} bannata"
     bot.reply_to(message,bot_answer)
     logging_procedure(message,bot_answer,log_file)
 
-def get_banned_words():
-    banned_doc = banned_words_table.search(Word_type.type == "banned")
-    if banned_doc: banned_list = banned_doc[0]["list"]
-    else: banned_list = []
-    return banned_list
-
-def get_ultra_banned_words():
-    banned_doc = banned_words_table.search(Word_type.type == "ultrabanned")
+def get_banned_words(word_type):
+    banned_doc = banned_words_table.search(Word_type.type == word_type)
     if banned_doc: banned_list = banned_doc[0]["list"]
     else: banned_list = []
     return banned_list
