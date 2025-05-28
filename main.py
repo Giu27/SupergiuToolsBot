@@ -32,18 +32,18 @@ commands = [
     types.BotCommand("qrcode", "Crea un QR Code di un contenuto testuale inviato")
 ]
 
-def store_user_data(user, bot_name, chat_id,cmd_perm,excl_sen, notif):
+def store_user_data(user, chat_id):
     user_data = {
         "user_id" : user.id,
         "first_name" : user.first_name,
         "last_name" : user.last_name,
         "username" : user.username,
         "is_bot" : user.is_bot,
-        "bot_name" : bot_name,
+        "bot_name" : get_botname(user.id),
         "chat_id" : chat_id,
-        "can_use_commands" : cmd_perm,
-        "exclusive_sentence" : excl_sen,
-        "notifications" : notif
+        "can_use_commands" : get_permission(user.id),
+        "exclusive_sentence" : get_excl_sentence(user.id),
+        "notifications" : get_notification_status(user.id)
         }
     users_table.upsert(user_data, User.user_id == user.id)
 
@@ -226,8 +226,8 @@ def get_permission(us_id):
         try: 
             return user_doc[0]["can_use_commands"]
         except KeyError:
-            return None
-    return None
+            return True
+    return True
 
 def get_notification_status(us_id):
     user_doc = users_table.search(User.user_id == us_id)
@@ -235,8 +235,8 @@ def get_notification_status(us_id):
         try: 
             return user_doc[0]["notifications"]
         except KeyError:
-            return None
-    return None
+            return True
+    return True
 
 def set_excl_sentence(message, us_id):
     MAX_CHARS = 200
@@ -613,7 +613,6 @@ def set_owner_name(message):
 @bot.message_handler(commands=["francescovieri"])
 def set_owner_permission(message):
     user = message.from_user
-    log_file = open(f"{log_path}/{user.id}.txt","a")
 
     current_permission = get_permission(user.id)
     if not current_permission:
@@ -645,13 +644,7 @@ def set_owner_sentence(message):
 def log(message):
     user = message.from_user
     log_file = open(f"{log_path}/{user.id}.txt","a")
-    current_permission = get_permission(user.id)
-    current_sentence = get_excl_sentence(user.id)
-    current_notification = get_notification_status(user.id)
-    if current_permission == None: current_permission = True
-    if current_notification == None: current_notification = True
-    botname = get_botname(user.id)
-    store_user_data(user,botname,message.chat.id,current_permission,current_sentence,current_notification)
+    store_user_data(user,message.chat.id)
     if user.username: user_info = user.username
     else: user_info = f"{user.first_name} {user.last_name}"
     logger.info(f"{user.id}, {user_info}: {message.text}")
