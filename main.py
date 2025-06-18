@@ -591,55 +591,6 @@ def add_ultra_banned_word(message):
     bot.register_next_step_handler(message,update_banned_words,"ultrabanned")
     logging_procedure(message,bot_answer,log_file)
 
-@bot.message_handler(commands=["francescosegreto"])
-def set_owner_name(message):
-    user = message.from_user
-    log_file = open(f"{log_path}/{user.id}.txt","a")
-    if get_botname(GIU_ID): giu_name = get_botname(GIU_ID)
-    else: 
-        giu_doc = users_table.search(User.user_id == GIU_ID)
-        if giu_doc: giu_name = giu_doc[0]["first_name"]
-    bot_answer = f"Che nome vuoi dare a {giu_name}?"
-
-    current_permission = get_permission(user.id)
-    if not current_permission:
-        permission_denied_procedure(message)
-        return
-    
-    bot.reply_to(message, bot_answer)
-    bot.register_next_step_handler(message,set_botname,GIU_ID)
-    logging_procedure(message,bot_answer,log_file)
-
-@bot.message_handler(commands=["francescovieri"])
-def set_owner_permission(message):
-    user = message.from_user
-
-    current_permission = get_permission(user.id)
-    if not current_permission:
-        permission_denied_procedure(message)
-        return
-    
-    set_permission(message,GIU_ID)
-
-@bot.message_handler(commands=["francescosupergiu"])
-def set_owner_sentence(message):
-    user = message.from_user
-    log_file = open(f"{log_path}/{user.id}.txt","a")
-    if get_botname(GIU_ID): giu_name = get_botname(GIU_ID)
-    else: 
-        giu_doc = users_table.search(User.user_id == GIU_ID)
-        if giu_doc: giu_name = giu_doc[0]["first_name"]
-    bot_answer = f"Che frase vuoi dare a {giu_name} durante il saluto?"
-
-    current_permission = get_permission(user.id)
-    if not current_permission:
-        permission_denied_procedure(message)
-        return
-    
-    bot.reply_to(message, bot_answer)
-    bot.register_next_step_handler(message,set_excl_sentence,GIU_ID)
-    logging_procedure(message,bot_answer,log_file)
-
 @bot.message_handler(func= lambda commands:True)
 def log(message):
     user = message.from_user
