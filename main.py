@@ -205,6 +205,9 @@ def get_chat_id(us_id):
     else: return None
 
 def set_permission(message,us_id):
+    if us_id == OWNER_ID:
+        permission_denied_procedure(message)
+        return
     user = message.from_user
     log_file = open(f"{log_path}/{user.id}.txt","a")
     if get_botname(us_id): viewed_name = get_botname(us_id)
