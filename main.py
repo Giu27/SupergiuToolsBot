@@ -8,7 +8,7 @@ load_dotenv()
 
 DEV_MODE = False
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
-GIU_ID = int(os.environ.get("GIU_ID"))
+OWNER_ID = int(os.environ.get("OWNER_ID"))
 bot = telebot.TeleBot(BOT_TOKEN)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -24,7 +24,8 @@ commands = [
     types.BotCommand("ciao","Saluta l'utente "),
     types.BotCommand("setname","Modifica il tuo nome"),
     types.BotCommand("resetname","Ripristina il tuo nome originale"),
-    types.BotCommand("sendtogiu","Invia un messaggio a Supergiu"),
+    types.BotCommand("sendtoowner","Invia un messaggio all'owner"),
+    types.BotCommand("sendtoadmin","Invia un messaggio a tutti gli admin"),
     types.BotCommand("eventstoday","Restituisce curiosità storiche sulla data di oggi"),
     types.BotCommand("randomnumber","Restituisce un numero casuale tra 0 e 999"),
     types.BotCommand("randomname","Imposta un nome casuale"),
@@ -42,6 +43,7 @@ def store_user_data(user, chat_id):
         "bot_name" : get_botname(user.id),
         "chat_id" : chat_id,
         "can_use_commands" : get_permission(user.id),
+        "admin_status" : get_admin(user.id),
         "exclusive_sentence" : get_excl_sentence(user.id),
         "notifications" : get_notification_status(user.id)
         }
@@ -229,6 +231,34 @@ def get_permission(us_id):
             return True
     return True
 
+def get_admin(us_id):
+    if us_id == OWNER_ID: return True
+    user_doc = users_table.search(User.user_id == us_id)
+    if user_doc: 
+        try: 
+            return user_doc[0]["admin_status"]
+        except KeyError:
+            return False
+    return False
+
+def set_admin(message,us_id):
+    user = message.from_user
+    log_file = open(f"{log_path}/{user.id}.txt","a")
+    if get_botname(us_id): viewed_name = get_botname(us_id)
+    else: 
+        us_doc = users_table.search(User.user_id == us_id)
+        if us_doc: viewed_name = us_doc[0]["first_name"]
+    if get_admin(us_id) == True:
+        bot_answer = f"{viewed_name} non è più admin!"
+    else:
+        bot_answer = f"{viewed_name} è ora admin!"
+    user_data = {
+        "admin_status" : not get_admin(us_id)
+        }
+    users_table.upsert(user_data, User.user_id == us_id)
+    bot.reply_to(message, bot_answer)
+    logging_procedure(message,bot_answer,log_file)
+
 def get_notification_status(us_id):
     user_doc = users_table.search(User.user_id == us_id)
     if user_doc: 
@@ -295,18 +325,21 @@ def send_message(message, chat_id):
     bot.reply_to(message,bot_answer)
     logging_procedure(message,bot_answer,log_file)
 
-def broadcast(message):
+def broadcast(message, admin_only=False):
     user = message.from_user
     log_file = open(f"{log_path}/{user.id}.txt","a")
-    if get_botname(GIU_ID): giu_name = get_botname(GIU_ID)
+    if get_botname(user.id): user_name = get_botname(user.id)
     else: 
-        giu_doc = users_table.search(User.user_id == GIU_ID)
-        if giu_doc: giu_name = giu_doc[0]["first_name"]
+        user_doc = users_table.search(User.user_id == user.id)
+        if user_doc: user_name = user_doc[0]["first_name"]
     for user in users_table:
-        bot_answer = f"Annuncio di {giu_name}:\n{message.text}"
+        bot_answer = f"Annuncio di {user_name}:\n{message.text}"
         try: 
             if user["chat_id"]:
-                bot.send_message(user["chat_id"], bot_answer)
+                if admin_only and user["admin_status"]:
+                    bot.send_message(user["chat_id"], bot_answer)
+                if not admin_only:
+                    bot.send_message(user["chat_id"], bot_answer)
         except KeyError: pass
     logging_procedure(message,bot_answer,log_file)
 
@@ -317,11 +350,12 @@ def choose_text(message,command):
     us_id = int(message.text)
 
     current_permission = get_permission(user.id)
-    if not current_permission or user.id != GIU_ID:
+    admin_status = get_admin(user.id)
+    if not current_permission or not admin_status:
         permission_denied_procedure(message)
         return
     
-    if command == set_permission or command == reset_botname:
+    if command == set_permission or command == reset_botname or command == set_admin:
         command(message,int(message.text))
         return
 
@@ -335,7 +369,8 @@ def choose_target(message,command):
     bot_answer = f"Inserisci l'id dell'utente: "
 
     current_permission = get_permission(user.id)
-    if not current_permission or user.id != GIU_ID:
+    admin_status = get_admin(user.id)
+    if not current_permission or not admin_status:
         permission_denied_procedure(message)
         return
 
@@ -419,15 +454,15 @@ def reset_name(message):
     
     reset_botname(message,user.id)
 
-@bot.message_handler(commands=["sendtogiu"])
-def send_to_giu(message):
+@bot.message_handler(commands=["sendtoowner"])
+def send_to_owner(message):
     user = message.from_user
     log_file = open(f"{log_path}/{user.id}.txt","a")
-    if get_botname(GIU_ID): giu_name = get_botname(GIU_ID)
+    if get_botname(OWNER_ID): owner_name = get_botname(OWNER_ID)
     else: 
-        giu_doc = users_table.search(User.user_id == GIU_ID)
-        if giu_doc: giu_name = giu_doc[0]["first_name"]
-    bot_answer = f"Che messaggio vuoi inviare a {giu_name}?"
+        owner_doc = users_table.search(User.user_id == OWNER_ID)
+        if owner_doc: owner_name = owner_doc[0]["first_name"]
+    bot_answer = f"Che messaggio vuoi inviare a {owner_name}?"
 
     current_permission = get_permission(user.id)
     if not current_permission:
@@ -435,7 +470,22 @@ def send_to_giu(message):
         return
     
     bot.reply_to(message, bot_answer)
-    bot.register_next_step_handler(message,send_message,GIU_ID)
+    bot.register_next_step_handler(message,send_message,OWNER_ID)
+    logging_procedure(message,bot_answer,log_file)
+
+@bot.message_handler(commands=["sendtoadmin"])
+def send_to_admin(message):
+    user = message.from_user
+    log_file = open(f"{log_path}/{user.id}.txt","a")
+    bot_answer = f"Che messaggio vuoi inviare agli admin?"
+
+    current_permission = get_permission(user.id)
+    if not current_permission:
+        permission_denied_procedure(message)
+        return
+    
+    bot.reply_to(message, bot_answer)
+    bot.register_next_step_handler(message,send_message,OWNER_ID)
     logging_procedure(message,bot_answer,log_file)
 
 @bot.message_handler(commands=["eventstoday"])
@@ -514,6 +564,14 @@ def set_person_name(message):
 def set_person_permission(message):
     choose_target(message, set_permission)
 
+@bot.message_handler(commands=["setpersonadmin"])
+def set_person_admin(message):
+    user = message.from_user
+    if user.id != OWNER_ID:
+        permission_denied_procedure(message)
+        return
+    choose_target(message, set_admin)
+
 @bot.message_handler(commands=["setpersonsentence"])
 def set_person_sentence(message):
     choose_target(message, set_excl_sentence)
@@ -529,7 +587,8 @@ def get_ids(message):
     bot_answer = ""
 
     current_permission = get_permission(user.id)
-    if not current_permission or user.id != GIU_ID:
+    admin_status = get_admin(user.id)
+    if not current_permission or not admin_status:
         permission_denied_procedure(message)
         return
     
@@ -553,7 +612,8 @@ def send_in_broadcast(message):
     bot_answer = "Che messaggio vuoi inviare in broadcast"
 
     current_permission = get_permission(user.id)
-    if not current_permission or user.id != GIU_ID:
+    admin_status = get_admin(user.id)
+    if not current_permission or not admin_status:
         permission_denied_procedure(message)
         return
     
@@ -568,7 +628,8 @@ def add_banned_word(message):
     bot_answer = "Che parola vuoi vietare?"
 
     current_permission = get_permission(user.id)
-    if not current_permission or user.id != GIU_ID:
+    admin_status = get_admin(user.id)
+    if not current_permission or not admin_status:
         permission_denied_procedure(message)
         return
     
@@ -583,7 +644,8 @@ def add_ultra_banned_word(message):
     bot_answer = "Che parola vuoi iper vietare?"
 
     current_permission = get_permission(user.id)
-    if not current_permission or user.id != GIU_ID:
+    admin_status = get_admin(user.id)
+    if not current_permission or not admin_status:
         permission_denied_procedure(message)
         return
     
