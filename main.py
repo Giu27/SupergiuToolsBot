@@ -205,10 +205,10 @@ def get_chat_id(us_id):
     else: return None
 
 def set_permission(message,us_id):
-    if us_id == OWNER_ID:
+    user = message.from_user
+    if us_id == OWNER_ID and (user.id != OWNER_ID and get_admin(OWNER_ID)):
         permission_denied_procedure(message)
         return
-    user = message.from_user
     log_file = open(f"{log_path}/{user.id}.txt","a")
     if get_botname(us_id): viewed_name = get_botname(us_id)
     else: 
@@ -235,10 +235,10 @@ def get_permission(us_id):
     return True
 
 def get_admin(us_id):
-    if us_id == OWNER_ID: return True
     user_doc = users_table.search(User.user_id == us_id)
     if user_doc: 
-        try: 
+        try:
+            if us_id == OWNER_ID and user_doc[0]["admin_status"] == None: return True 
             return user_doc[0]["admin_status"]
         except KeyError:
             return False
@@ -246,6 +246,9 @@ def get_admin(us_id):
 
 def set_admin(message,us_id):
     user = message.from_user
+    if us_id == OWNER_ID and user.id != OWNER_ID:
+        permission_denied_procedure(message)
+        return
     log_file = open(f"{log_path}/{user.id}.txt","a")
     if get_botname(us_id): viewed_name = get_botname(us_id)
     else: 
