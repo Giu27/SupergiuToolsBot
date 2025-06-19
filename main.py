@@ -29,8 +29,9 @@ commands = [
     types.BotCommand("eventstoday","Restituisce curiosità storiche sulla data di oggi"),
     types.BotCommand("randomnumber","Restituisce un numero casuale tra 0 e 999"),
     types.BotCommand("randomname","Imposta un nome casuale"),
+    types.BotCommand("qrcode", "Crea un QR Code di un contenuto testuale inviato"),
     types.BotCommand("notifications","Attiva/Disattiva le notifiche"),
-    types.BotCommand("qrcode", "Crea un QR Code di un contenuto testuale inviato")
+    types.BotCommand("info","Restituisce le informazioni memorizzate dal bot")
 ]
 
 def store_user_data(user, chat_id):
@@ -560,6 +561,15 @@ def request_qrcode(message):
     bot_answer = "Inviami del testo e genererò un QR code"
     bot.reply_to(message,bot_answer)
     bot.register_next_step_handler(message, generate_qrcode,chat_id)
+    logging_procedure(message,bot_answer,log_file)
+
+@bot.message_handler(commands=["info"])
+def info(message):
+    user = message.from_user
+    log_file = open(f"{log_path}/{user.id}.txt","a")
+
+    bot_answer = f"Nome utente: {user.first_name}\nCognome utente: {user.last_name}\nUsername: {user.username}\nUser ID: {user.id}\nNome in uso nel bot: {get_botname(user.id)}\nFrase personale: {get_excl_sentence(user.id)}\nNotifiche attivate: {get_notification_status(user.id)}\nAccount bloccato: {not get_permission(user.id)}\nAccount amministratore: {get_admin(user.id)}"
+    bot.reply_to(message, bot_answer)
     logging_procedure(message,bot_answer,log_file)
 
 @bot.message_handler(commands=["setpersonname"])
