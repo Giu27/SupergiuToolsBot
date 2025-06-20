@@ -154,16 +154,13 @@ def set_botname(message, us_id, randomName=False):
     
     user_doc = users_table.search(User.user_id == us_id)
     if user_doc:
-        if get_botname(us_id): target_viewed_name = get_botname(us_id)
-        else: target_viewed_name = user_doc[0]["first_name"]
+        target_viewed_name = get_viewed_name(us_id)
         user_doc[0]["bot_name"] = name
         if user.id == us_id:
             bot_answer = f"Il tuo nome è ora {name}"
         else:
             bot_answer = f"Il nome di {target_viewed_name} è ora {name}"
-            user_data = {
-                "bot_name" : name
-            }
+            user_data = { "bot_name" : name }
             users_table.upsert(user_data, User.user_id == us_id)
 
     else: bot_answer = "Utente non trovato"
@@ -197,6 +194,13 @@ def get_botname(us_id):
         return botname
     else: return None
 
+def get_viewed_name(us_id):
+    if get_botname(us_id): user_name = get_botname(us_id)
+    else: 
+        user_doc = users_table.search(User.user_id == us_id)
+        if user_doc: user_name = user_doc[0]["first_name"]
+    return user_name
+
 def get_chat_id(us_id):
     user_doc = users_table.search(User.user_id == us_id)
     if user_doc: 
@@ -211,10 +215,7 @@ def set_permission(message,us_id):
         permission_denied_procedure(message)
         return
     log_file = open(f"{log_path}/{user.id}.txt","a")
-    if get_botname(us_id): viewed_name = get_botname(us_id)
-    else: 
-        us_doc = users_table.search(User.user_id == us_id)
-        if us_doc: viewed_name = us_doc[0]["first_name"]
+    viewed_name = get_viewed_name(us_id)
     if get_permission(us_id) == True:
         bot_answer = f"Permessi di {viewed_name} bloccati!"
     else:
@@ -239,11 +240,12 @@ def get_admin(us_id):
     user_doc = users_table.search(User.user_id == us_id)
     if user_doc: 
         try:
-            if us_id == OWNER_ID and user_doc[0]["admin_status"] == None: return True 
+            if us_id == OWNER_ID and user_doc[0]["admin_status"] == None: return True
+            if user_doc[0]["admin_status"] == None: return False
             return user_doc[0]["admin_status"]
         except KeyError:
             return False
-    return False
+    return None
 
 def set_admin(message,us_id):
     user = message.from_user
@@ -251,10 +253,7 @@ def set_admin(message,us_id):
         permission_denied_procedure(message)
         return
     log_file = open(f"{log_path}/{user.id}.txt","a")
-    if get_botname(us_id): viewed_name = get_botname(us_id)
-    else: 
-        us_doc = users_table.search(User.user_id == us_id)
-        if us_doc: viewed_name = us_doc[0]["first_name"]
+    viewed_name = get_viewed_name(us_id)
     if get_admin(us_id) == True:
         bot_answer = f"{viewed_name} non è più admin!"
     else:
@@ -295,8 +294,7 @@ def set_excl_sentence(message, us_id):
     
     user_doc = users_table.search(User.user_id == us_id)
     if user_doc:
-        if get_botname(us_id): target_viewed_name = get_botname(us_id)
-        else: target_viewed_name = user_doc[0]["first_name"]
+        target_viewed_name = get_viewed_name(us_id)
         if sentence.lower() == "none": sentence = None
         user_doc[0]["exclusive_sentence"] = sentence
         if user.id == us_id:
@@ -321,12 +319,22 @@ def get_excl_sentence(us_id):
             return None
     return None
 
+def get_info(message,us_id):
+    user = message.from_user
+    log_file = open(f"{log_path}/{user.id}.txt","a")
+    user_doc = users_table.search(User.user_id == us_id)
+
+    if user_doc:
+        bot_answer = f"Nome utente: {user_doc[0]["first_name"]}\nCognome utente: {user_doc[0]["last_name"]}\nUsername: {user_doc[0]["username"]}\nUser ID: {user_doc[0]["user_id"]}\nNome in uso nel bot: {get_botname(us_id)}\nFrase personale: {get_excl_sentence(us_id)}\nNotifiche attivate: {get_notification_status(us_id)}\nAccount bloccato: {not get_permission(us_id)}\nAccount amministratore: {get_admin(us_id)}"
+    else: bot_answer = "Utente non trovato"
+    bot.reply_to(message, bot_answer)
+    logging_procedure(message,bot_answer,log_file)
+
 def send_message(message, chat_id):
     user = message.from_user
     log_file = open(f"{log_path}/{user.id}.txt","a")
     bot_answer = "Inviato!"
-    if get_botname(user.id): viewed_name = get_botname(user.id)
-    else: viewed_name = user.first_name
+    viewed_name = get_viewed_name(user.id)
     message_to_send = f"Da: {viewed_name}({user.id}):\n{message.text}"
     bot.send_message(chat_id,message_to_send)
     bot.reply_to(message,bot_answer)
@@ -335,10 +343,8 @@ def send_message(message, chat_id):
 def broadcast(message, admin_only=False):
     user = message.from_user
     log_file = open(f"{log_path}/{user.id}.txt","a")
-    if get_botname(user.id): user_name = get_botname(user.id)
-    else: 
-        user_doc = users_table.search(User.user_id == user.id)
-        if user_doc: user_name = user_doc[0]["first_name"]
+    user_name = get_viewed_name(user.id)
+
     for user in users_table:
         bot_answer = f"Annuncio di {user_name}:\n{message.text}"
         try: 
@@ -362,7 +368,7 @@ def choose_text(message,command):
         permission_denied_procedure(message)
         return
     
-    if command == set_permission or command == reset_botname or command == set_admin:
+    if command == set_permission or command == reset_botname or command == set_admin or command == get_info:
         command(message,int(message.text))
         return
 
@@ -566,11 +572,7 @@ def request_qrcode(message):
 @bot.message_handler(commands=["info"])
 def info(message):
     user = message.from_user
-    log_file = open(f"{log_path}/{user.id}.txt","a")
-
-    bot_answer = f"Nome utente: {user.first_name}\nCognome utente: {user.last_name}\nUsername: {user.username}\nUser ID: {user.id}\nNome in uso nel bot: {get_botname(user.id)}\nFrase personale: {get_excl_sentence(user.id)}\nNotifiche attivate: {get_notification_status(user.id)}\nAccount bloccato: {not get_permission(user.id)}\nAccount amministratore: {get_admin(user.id)}"
-    bot.reply_to(message, bot_answer)
-    logging_procedure(message,bot_answer,log_file)
+    get_info(message,user.id)
 
 @bot.message_handler(commands=["setpersonname"])
 def set_person_name(message):
@@ -595,6 +597,10 @@ def set_person_sentence(message):
 @bot.message_handler(commands=["resetpersonname"])
 def reset_person_name(message):
     choose_target(message, reset_botname)
+
+@bot.message_handler(commands=["getpersoninfo"])
+def get_person_info(message):
+    choose_target(message,get_info)
 
 @bot.message_handler(commands=["getids"])
 def get_ids(message):
