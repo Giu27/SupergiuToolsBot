@@ -35,6 +35,7 @@ commands = [
 ]
 
 def store_user_data(user, chat_id):
+    """Creates and updates the user data in the database"""
     user_data = {
         "user_id" : user.id,
         "first_name" : user.first_name,
@@ -50,7 +51,8 @@ def store_user_data(user, chat_id):
         }
     users_table.upsert(user_data, User.user_id == user.id)
 
-def check_banned_name(name):
+def check_banned_name(name : str) -> bool:
+    """Return true if name is banned, false otherwise"""
     banned_words = get_banned_words("banned")
     ultra_banned_words = get_banned_words("ultrabanned")
     numToCh = {'1' : 'i','3' : 'e','4' : 'r', '0' : 'o', '7' : 'l', '5' : 's','$': 'e','€':'e','т' : 't','п' : 'n'}
@@ -83,20 +85,22 @@ def check_banned_name(name):
     for word in ultra_banned_words:
         if word in wordname: return True
 
-def logging_procedure(message,bot_answer,log_file):
-    """Procedura standard di log in tutte le funzioni"""
+def logging_procedure(message, bot_answer : str, log_file):
+    """Standard logging to a file and console of the user and bot messages not registered by log function"""
     log(message)
     logger.info(f"Bot: {bot_answer}")
     log_file.write(f"Bot: {bot_answer}\n")
 
-def permission_denied_procedure(message):
+def permission_denied_procedure(message, error_msg : str = ""):
+    """Standard procedure, whenever a user doesn't have the permission to do a certain action"""
     user = message.from_user
     log_file = open(f"{log_path}/{user.id}.txt","a")
-    bot_answer = "Non hai il permesso di usare questo comando"
+    bot_answer = f"Non hai il permesso di usare questo comando\n{error_msg}"
     bot.reply_to(message,bot_answer)
     logging_procedure(message,bot_answer,log_file)
 
-def send_on_off_notification(status):
+def send_on_off_notification(status : str):
+    """Sends a notification whenever the bot turns on or off"""
     if not DEV_MODE:
         for user in users_table:
             bot_answer = f"Il bot è {status}!"
@@ -106,7 +110,8 @@ def send_on_off_notification(status):
                     logger.info(f"Bot: {bot_answer}. chat_id: {user["chat_id"]}")
             except KeyError: pass
 
-def generate_random_name():
+def generate_random_name() -> str:
+    """Return a random name between names from Italian, english, French, Ukranian, greek and japanese names"""
     langs = ["it_IT", "en_UK", "fr_Fr","uk_UA","el_GR","ja_JP"]
     lang = random.choice(langs)
     fake = faker.Faker(lang)
@@ -118,6 +123,7 @@ def generate_random_name():
     return name
 
 def generate_qrcode(message,chat_id):
+    """Generates a qr code from a string of text"""
     user = message.from_user
     log_file = open(f"{log_path}/{user.id}.txt","a")
     bot_answer = "Inviato!"
@@ -133,7 +139,8 @@ def generate_qrcode(message,chat_id):
     bot.reply_to(message, bot_answer)
     logging_procedure(message,bot_answer,log_file)
 
-def set_botname(message, us_id, randomName=False):
+def set_botname(message, us_id : int, randomName=False):
+    """Updates the botname of the user identified by us_id"""
     MAX_CHARS = 200
     user = message.from_user
     name = message.text
@@ -167,7 +174,8 @@ def set_botname(message, us_id, randomName=False):
     bot.reply_to(message,bot_answer)
     logging_procedure(message,bot_answer,log_file)
 
-def reset_botname(message, us_id):
+def reset_botname(message, us_id : int):
+    """Reset the name of a user identified by us_id"""
     user = message.from_user
     log_file = open(f"{log_path}/{user.id}.txt","a")
     
@@ -182,7 +190,8 @@ def reset_botname(message, us_id):
     bot.reply_to(message,bot_answer)
     logging_procedure(message,bot_answer,log_file)
 
-def get_botname(us_id):
+def get_botname(us_id : int) -> str | None:
+    """Returns the botname of the user identified by us_id"""
     user_doc = users_table.search(User.user_id == us_id)
     if user_doc: 
         botname = user_doc[0]["bot_name"]
@@ -194,14 +203,17 @@ def get_botname(us_id):
         return botname
     else: return None
 
-def get_viewed_name(us_id):
+def get_viewed_name(us_id : int) -> str | None:
+    """Returns the currently visualized name in the bot"""
     if get_botname(us_id): user_name = get_botname(us_id)
     else: 
         user_doc = users_table.search(User.user_id == us_id)
         if user_doc: user_name = user_doc[0]["first_name"]
+        else: return None
     return user_name
 
-def get_chat_id(us_id):
+def get_chat_id(us_id : int) -> int | None:
+    """Return the chat id stored in the database"""
     user_doc = users_table.search(User.user_id == us_id)
     if user_doc: 
         ch_id = user_doc[0]["chat_id"]
@@ -209,7 +221,8 @@ def get_chat_id(us_id):
         else: return None
     else: return None
 
-def set_permission(message,us_id):
+def set_permission(message,us_id : int):
+    """Updates the status of a user from normal to restricted and vice versa"""
     user = message.from_user
     if us_id == OWNER_ID and (user.id != OWNER_ID and get_admin(OWNER_ID)):
         permission_denied_procedure(message)
@@ -227,7 +240,8 @@ def set_permission(message,us_id):
     bot.reply_to(message, bot_answer)
     logging_procedure(message,bot_answer,log_file)
 
-def get_permission(us_id):
+def get_permission(us_id : int) -> bool:
+    """Returns true if the user has a normal status, false if restricted """
     user_doc = users_table.search(User.user_id == us_id)
     if user_doc: 
         try: 
@@ -236,7 +250,8 @@ def get_permission(us_id):
             return True
     return True
 
-def get_admin(us_id):
+def get_admin(us_id : int) -> bool:
+    """Return true if the user identified by us_id is admin, false otherwise"""
     user_doc = users_table.search(User.user_id == us_id)
     if user_doc: 
         try:
@@ -247,7 +262,8 @@ def get_admin(us_id):
             return False
     return None
 
-def set_admin(message,us_id):
+def set_admin(message,us_id : int):
+    """Turn the user identified by us_id into an admin or vice versa"""
     user = message.from_user
     if us_id == OWNER_ID and user.id != OWNER_ID:
         permission_denied_procedure(message)
@@ -265,7 +281,8 @@ def set_admin(message,us_id):
     bot.reply_to(message, bot_answer)
     logging_procedure(message,bot_answer,log_file)
 
-def get_notification_status(us_id):
+def get_notification_status(us_id : int) -> bool:
+    """Returns true if the user has on/off notifications active, false otherwise"""
     user_doc = users_table.search(User.user_id == us_id)
     if user_doc: 
         try: 
@@ -274,7 +291,8 @@ def get_notification_status(us_id):
             return True
     return True
 
-def set_excl_sentence(message, us_id):
+def set_excl_sentence(message, us_id : int): 
+    """Set a special sentence the user identified by us_id receives when greeted by the bot"""
     MAX_CHARS = 200
     user = message.from_user
     sentence = message.text
@@ -310,7 +328,8 @@ def set_excl_sentence(message, us_id):
     bot.reply_to(message,bot_answer)
     logging_procedure(message,bot_answer,log_file)
 
-def get_excl_sentence(us_id):
+def get_excl_sentence(us_id : int) -> str | None:
+    """Returns the special sentence of the user us_id"""
     user_doc = users_table.search(User.user_id == us_id)
     if user_doc: 
         try: 
@@ -319,7 +338,8 @@ def get_excl_sentence(us_id):
             return None
     return None
 
-def get_info(message,us_id):
+def get_info(message,us_id : int):
+    """The bot sends a message with basic user informations"""
     user = message.from_user
     log_file = open(f"{log_path}/{user.id}.txt","a")
     user_doc = users_table.search(User.user_id == us_id)
@@ -330,7 +350,8 @@ def get_info(message,us_id):
     bot.reply_to(message, bot_answer)
     logging_procedure(message,bot_answer,log_file)
 
-def send_message(message, chat_id):
+def send_message(message, chat_id : int):
+    """Send a message to the chat identified by chat_id"""
     user = message.from_user
     log_file = open(f"{log_path}/{user.id}.txt","a")
     bot_answer = "Inviato!"
@@ -341,6 +362,7 @@ def send_message(message, chat_id):
     logging_procedure(message,bot_answer,log_file)
 
 def broadcast(message, admin_only=False):
+    """Send a message to all the users of the bot, or if admin only to just the admins"""
     user = message.from_user
     log_file = open(f"{log_path}/{user.id}.txt","a")
     user_name = get_viewed_name(user.id)
@@ -356,7 +378,8 @@ def broadcast(message, admin_only=False):
         except KeyError: pass
     logging_procedure(message,bot_answer,log_file)
 
-def choose_text(message,command):
+def choose_text(message,command : callable):
+    """Second step of the admin framework, it takes in the required text argument of certain commands"""
     user = message.from_user
     log_file = open(f"{log_path}/{user.id}.txt","a")
     bot_answer = f"Inserisci l'argomento: "
@@ -376,7 +399,8 @@ def choose_text(message,command):
     bot.register_next_step_handler(message, command, us_id)
     logging_procedure(message,bot_answer,log_file)
 
-def choose_target(message,command):
+def choose_target(message,command : callable):
+    """First step of the admin framework, it specifies the user who the admin is targeting with its command. The admin framework let the admins reuse the functions written for normal use in a specific admin mode"""
     user = message.from_user
     log_file = open(f"{log_path}/{user.id}.txt","a")
     bot_answer = f"Inserisci l'id dell'utente: "
@@ -391,7 +415,8 @@ def choose_target(message,command):
     bot.register_next_step_handler(message, choose_text,command)
     logging_procedure(message,bot_answer,log_file)
 
-def update_banned_words(message, word_type):
+def update_banned_words(message, word_type : str):
+    """Updates the lists of banned worlds"""
     word = (message.text).lower()
     user = message.from_user
     log_file = open(f"{log_path}/{user.id}.txt","a")
@@ -415,7 +440,8 @@ def update_banned_words(message, word_type):
     bot.reply_to(message,bot_answer)
     logging_procedure(message,bot_answer,log_file)
 
-def get_banned_words(word_type):
+def get_banned_words(word_type) -> list:
+    """Return the list of a specified type of banned world"""
     banned_doc = banned_words_table.search(Word_type.type == word_type)
     if banned_doc: banned_list = banned_doc[0]["list"]
     else: banned_list = []
@@ -427,6 +453,7 @@ send_on_off_notification("online")
 
 @bot.message_handler(commands=["start","ciao"])
 def send_welcome(message):
+    """Greet the user with its name and a special sentence"""
     user = message.from_user
     log_file = open(f"{log_path}/{user.id}.txt","a")
     if get_botname(user.id): viewed_name = get_botname(user.id)
@@ -469,6 +496,7 @@ def reset_name(message):
 
 @bot.message_handler(commands=["sendtoowner"])
 def send_to_owner(message):
+    """Send a message to the owner of the bot"""
     user = message.from_user
     log_file = open(f"{log_path}/{user.id}.txt","a")
     if get_botname(OWNER_ID): owner_name = get_botname(OWNER_ID)
@@ -488,6 +516,7 @@ def send_to_owner(message):
 
 @bot.message_handler(commands=["sendtoadmin"])
 def send_to_admin(message):
+    """Send a message to all the admins of the bot"""
     user = message.from_user
     log_file = open(f"{log_path}/{user.id}.txt","a")
     bot_answer = f"Che messaggio vuoi inviare agli admin?"
@@ -503,6 +532,7 @@ def send_to_admin(message):
 
 @bot.message_handler(commands=["eventstoday"])
 def events_on_wikipedia(message):
+    """send a random event of the day from italian wikipedia"""
     user = message.from_user
     log_file = open(f"{log_path}/{user.id}.txt","a")
     wikipedia.set_lang("it")
@@ -677,6 +707,7 @@ def add_ultra_banned_word(message):
 
 @bot.message_handler(func= lambda commands:True)
 def log(message):
+    """Logs messages that aren't commands and updates the database"""
     user = message.from_user
     log_file = open(f"{log_path}/{user.id}.txt","a")
     store_user_data(user,message.chat.id)
