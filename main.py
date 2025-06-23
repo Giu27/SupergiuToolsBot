@@ -34,7 +34,7 @@ commands = [
     types.BotCommand("info","Restituisce le informazioni memorizzate dal bot")
 ]
 
-def store_user_data(user, chat_id):
+def store_user_data(user, chat_id : int):
     """Creates and updates the user data in the database"""
     user_data = {
         "user_id" : user.id,
@@ -703,6 +703,15 @@ def add_ultra_banned_word(message):
     
     bot.reply_to(message, bot_answer)
     bot.register_next_step_handler(message,update_banned_words,"ultrabanned")
+    logging_procedure(message,bot_answer,log_file)
+
+@bot.message_handler(content_types=["photo","video","sticker","animation","document","audio","voice"])
+def handle_media(message):
+    user = message.from_user
+    log_file = open(f"{log_path}/{user.id}.txt","a")
+    bot_answer = f"Ciao {get_viewed_name(user.id)}, ho perso gli occhiali e non posso visualizzare questo contenuto"
+    if (message.voice or message.audio): bot_answer = f"Ciao {get_viewed_name(user.id)}, ho perso le cuffie e non posso ascoltare questo contenuto"
+    bot.reply_to(message, bot_answer)
     logging_procedure(message,bot_answer,log_file)
 
 @bot.message_handler(func= lambda commands:True)
