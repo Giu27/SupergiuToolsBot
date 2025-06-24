@@ -20,6 +20,13 @@ banned_words_table = db.table("banned_words")
 User = Query()
 Word_type = Query()
 
+denied_messages = {
+    "target_admin" : "Non puoi bloccare un admin.",
+    "owner_only" : "Devi essere owner.",
+    "admin_only" : "Devi essere admin",
+    "Blocked" : "Il tuo account è soggetto a restrizioni."
+}
+
 commands = [
     types.BotCommand("ciao","Saluta l'utente "),
     types.BotCommand("setname","Modifica il tuo nome"),
@@ -95,7 +102,7 @@ def permission_denied_procedure(message, error_msg : str = ""):
     """Standard procedure, whenever a user doesn't have the permission to do a certain action"""
     user = message.from_user
     log_file = open(f"{log_path}/{user.id}.txt","a")
-    bot_answer = f"Non hai il permesso di usare questo comando\n{error_msg}"
+    bot_answer = f"Non hai il permesso di usare questo comando!\n{error_msg}"
     bot.reply_to(message,bot_answer)
     logging_procedure(message,bot_answer,log_file)
 
@@ -224,10 +231,12 @@ def get_chat_id(us_id : int) -> int | None:
 def set_permission(message,us_id : int):
     """Updates the status of a user from normal to restricted and vice versa"""
     user = message.from_user
-    if us_id == OWNER_ID and (user.id != OWNER_ID and get_admin(OWNER_ID)):
-        permission_denied_procedure(message)
-        return
     log_file = open(f"{log_path}/{user.id}.txt","a")
+
+    if get_admin(us_id):
+        permission_denied_procedure(message, denied_messages["target_admin"])
+        return
+    
     viewed_name = get_viewed_name(us_id)
     if get_permission(us_id) == True:
         bot_answer = f"Permessi di {viewed_name} bloccati!"
@@ -265,9 +274,6 @@ def get_admin(us_id : int) -> bool:
 def set_admin(message,us_id : int):
     """Turn the user identified by us_id into an admin or vice versa"""
     user = message.from_user
-    if us_id == OWNER_ID and user.id != OWNER_ID:
-        permission_denied_procedure(message)
-        return
     log_file = open(f"{log_path}/{user.id}.txt","a")
     viewed_name = get_viewed_name(us_id)
     if get_admin(us_id) == True:
@@ -369,6 +375,7 @@ def broadcast(message, admin_only=False):
 
     for user in users_table:
         bot_answer = f"Annuncio di {user_name}:\n{message.text}"
+        if admin_only: bot_answer = f"Messaggio per gli admin di {user_name}:\n{message.text}"
         try: 
             if user["chat_id"]:
                 if admin_only and user["admin_status"]:
@@ -376,6 +383,7 @@ def broadcast(message, admin_only=False):
                 if not admin_only:
                     bot.send_message(user["chat_id"], bot_answer)
         except KeyError: pass
+    bot.reply_to(message,"Inviato!")
     logging_procedure(message,bot_answer,log_file)
 
 def choose_text(message,command : callable):
@@ -385,10 +393,9 @@ def choose_text(message,command : callable):
     bot_answer = f"Inserisci l'argomento: "
     us_id = int(message.text)
 
-    current_permission = get_permission(user.id)
     admin_status = get_admin(user.id)
-    if not current_permission or not admin_status:
-        permission_denied_procedure(message)
+    if not admin_status:
+        permission_denied_procedure(message, denied_messages["admin_only"])
         return
     
     if command == set_permission or command == reset_botname or command == set_admin or command == get_info:
@@ -405,10 +412,9 @@ def choose_target(message,command : callable):
     log_file = open(f"{log_path}/{user.id}.txt","a")
     bot_answer = f"Inserisci l'id dell'utente: "
 
-    current_permission = get_permission(user.id)
     admin_status = get_admin(user.id)
-    if not current_permission or not admin_status:
-        permission_denied_procedure(message)
+    if not admin_status:
+        permission_denied_procedure(message,denied_messages["admin_only"])
         return
 
     bot.reply_to(message, bot_answer)
@@ -477,7 +483,7 @@ def set_name(message):
 
     current_permission = get_permission(user.id)
     if not current_permission:
-        permission_denied_procedure(message)
+        permission_denied_procedure(message,denied_messages["Blocked"])
         return
     
     bot.reply_to(message, bot_answer)
@@ -489,7 +495,7 @@ def reset_name(message):
     user = message.from_user
     current_permission = get_permission(user.id)
     if not current_permission:
-        permission_denied_procedure(message)
+        permission_denied_procedure(message,denied_messages["Blocked"])
         return
     
     reset_botname(message,user.id)
@@ -507,7 +513,7 @@ def send_to_owner(message):
 
     current_permission = get_permission(user.id)
     if not current_permission:
-        permission_denied_procedure(message)
+        permission_denied_procedure(message,denied_messages["Blocked"])
         return
     
     bot.reply_to(message, bot_answer)
@@ -523,11 +529,11 @@ def send_to_admin(message):
 
     current_permission = get_permission(user.id)
     if not current_permission:
-        permission_denied_procedure(message)
+        permission_denied_procedure(message, denied_messages["Blocked"])
         return
     
     bot.reply_to(message, bot_answer)
-    bot.register_next_step_handler(message,send_message,OWNER_ID)
+    bot.register_next_step_handler(message,broadcast,True)
     logging_procedure(message,bot_answer,log_file)
 
 @bot.message_handler(commands=["eventstoday"])
@@ -563,7 +569,7 @@ def random_name(message):
     user = message.from_user
     current_permission = get_permission(user.id)
     if not current_permission:
-        permission_denied_procedure(message)
+        permission_denied_procedure(message, denied_messages["Blocked"])
         return
     
     set_botname(message,user.id,True)
@@ -591,7 +597,7 @@ def request_qrcode(message):
     log_file = open(f"{log_path}/{user.id}.txt","a")
     current_permission = get_permission(user.id)
     if not current_permission:
-        permission_denied_procedure(message)
+        permission_denied_procedure(message, denied_messages["Blocked"])
         return
     
     bot_answer = "Inviami del testo e genererò un QR code"
@@ -616,7 +622,7 @@ def set_person_permission(message):
 def set_person_admin(message):
     user = message.from_user
     if user.id != OWNER_ID:
-        permission_denied_procedure(message)
+        permission_denied_procedure(message, denied_messages["owner_only"])
         return
     choose_target(message, set_admin)
 
@@ -638,10 +644,9 @@ def get_ids(message):
     log_file = open(f"{log_path}/{user.id}.txt","a")
     bot_answer = ""
 
-    current_permission = get_permission(user.id)
     admin_status = get_admin(user.id)
-    if not current_permission or not admin_status:
-        permission_denied_procedure(message)
+    if not admin_status:
+        permission_denied_procedure(message,denied_messages["admin_only"])
         return
     
     for user in users_table:
@@ -663,10 +668,9 @@ def send_in_broadcast(message):
     log_file = open(f"{log_path}/{user.id}.txt","a")
     bot_answer = "Che messaggio vuoi inviare in broadcast"
 
-    current_permission = get_permission(user.id)
     admin_status = get_admin(user.id)
-    if not current_permission or not admin_status:
-        permission_denied_procedure(message)
+    if not admin_status:
+        permission_denied_procedure(message, denied_messages["admin_only"])
         return
     
     bot.reply_to(message, bot_answer)
@@ -679,10 +683,9 @@ def add_banned_word(message):
     log_file = open(f"{log_path}/{user.id}.txt","a")
     bot_answer = "Che parola vuoi vietare?"
 
-    current_permission = get_permission(user.id)
     admin_status = get_admin(user.id)
-    if not current_permission or not admin_status:
-        permission_denied_procedure(message)
+    if not admin_status:
+        permission_denied_procedure(message, denied_messages["admin_only"])
         return
     
     bot.reply_to(message, bot_answer)
@@ -695,10 +698,9 @@ def add_ultra_banned_word(message):
     log_file = open(f"{log_path}/{user.id}.txt","a")
     bot_answer = "Che parola vuoi iper vietare?"
 
-    current_permission = get_permission(user.id)
     admin_status = get_admin(user.id)
-    if not current_permission or not admin_status:
-        permission_denied_procedure(message)
+    if not admin_status:
+        permission_denied_procedure(message, denied_messages["admin_only"])
         return
     
     bot.reply_to(message, bot_answer)
