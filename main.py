@@ -102,7 +102,6 @@ def logging_procedure(message, bot_answer : str):
 
 def permission_denied_procedure(message, error_msg : str = ""):
     """Standard procedure, whenever a user doesn't have the permission to do a certain action"""
-    user = message.from_user
     bot_answer = f"Non hai il permesso di usare questo comando!\n{error_msg}"
     bot.reply_to(message,bot_answer)
     logging_procedure(message,bot_answer)
@@ -377,20 +376,26 @@ def broadcast(message, admin_only=False):
 
 def choose_text(message,command : callable):
     """Second step of the admin framework, it takes in the required text argument of certain commands"""
-    user = message.from_user
-    bot_answer = f"Inserisci l'argomento: "
-    us_id = int(message.text)
+    user_doc = users_table.search(User.username == message.text)
+    if user_doc:
+        us_id = user_doc[0]["user_id"]
+    else:
+        user_doc = users_table.search(User.first_name == message.text)
+        if user_doc:
+            us_id = user_doc[0]["user_id"]
+        else:
+            bot_answer = "Utente non trovato"
+            bot.reply_to(message, bot_answer, reply_markup=types.ReplyKeyboardRemove())
+            return
+    bot_answer = f"Utente selezionato {get_viewed_name(us_id)} ({us_id}). \nInserisci l'argomento:"
 
-    admin_status = get_admin(user.id)
-    if not admin_status:
-        permission_denied_procedure(message, denied_messages["admin_only"])
-        return
-    
     if command == set_permission or command == reset_botname or command == set_admin or command == get_info:
-        command(message,int(message.text))
+        bot_answer = f"Utente selezionato {get_viewed_name(us_id)} ({us_id})."
+        bot.reply_to(message, bot_answer, reply_markup=types.ReplyKeyboardRemove())
+        command(message,us_id)
         return
 
-    bot.reply_to(message, bot_answer)
+    bot.reply_to(message, bot_answer, reply_markup=types.ReplyKeyboardRemove())
     bot.register_next_step_handler(message, command, us_id)
     logging_procedure(message,bot_answer)
 
@@ -403,15 +408,22 @@ def choose_target(message,command : callable):
     if not admin_status:
         permission_denied_procedure(message,denied_messages["admin_only"])
         return
+    
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True,one_time_keyboard=True,selective=True)
+    for user_data in users_table:
+        if user_data["username"]:
+            button = types.KeyboardButton(user_data["username"])
+        else:
+            button = types.KeyboardButton(user_data["first_name"])
+        markup.add(button)
 
-    bot.reply_to(message, bot_answer)
+    bot.reply_to(message, bot_answer, reply_markup=markup)
     bot.register_next_step_handler(message, choose_text,command)
     logging_procedure(message,bot_answer)
 
 def update_banned_words(message, word_type : str):
     """Updates the lists of banned worlds"""
     word = (message.text).lower()
-    user = message.from_user
     banned_doc = banned_words_table.search(Word_type.type == word_type)
     if banned_doc:
         banned_list = banned_doc[0]["list"]
