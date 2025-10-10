@@ -188,8 +188,8 @@ localizations = {
     "permission" : {
         "en" : {
             "permission_of" : "Rights of",
-            "locked" : "locked!",
-            "unlocked" : "disabled!"
+            "locked" : "disabled!",
+            "unlocked" : "enabled!"
         },
         "it" : {
             "permission_of" : "Permessi di",
