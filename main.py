@@ -3,6 +3,8 @@ from dotenv import load_dotenv
 from tinydb import TinyDB, Query
 from telebot import types
 from datetime import date
+from deep_translator import GoogleTranslator
+from localizations import *
 
 load_dotenv()
 
@@ -20,28 +22,6 @@ banned_words_table = db.table("banned_words")
 User = Query()
 Word_type = Query()
 
-denied_messages = {
-    "target_admin" : "Non puoi bloccare un admin.",
-    "owner_only" : "Devi essere owner.",
-    "admin_only" : "Devi essere admin",
-    "Blocked" : "Il tuo account è soggetto a restrizioni."
-}
-
-commands = [
-    types.BotCommand("ciao","Saluta l'utente "),
-    types.BotCommand("setname","Modifica il tuo nome"),
-    types.BotCommand("resetname","Ripristina il tuo nome originale"),
-    types.BotCommand("sendtoowner","Invia un messaggio all'owner"),
-    types.BotCommand("sendtoadmin","Invia un messaggio a tutti gli admin"),
-    types.BotCommand("eventstoday","Restituisce curiosità storiche sulla data di oggi"),
-    types.BotCommand("randomnumber","Restituisce un numero casuale tra 0 e 999"),
-    types.BotCommand("randomname","Imposta un nome casuale"),
-    types.BotCommand("qrcode", "Crea un QR Code di un contenuto testuale inviato"),
-    types.BotCommand("notifications","Attiva/Disattiva le notifiche"),
-    types.BotCommand("info","Restituisce le informazioni memorizzate dal bot"),
-    types.BotCommand("about","Restituisce informazioni sul bot")
-]
-
 def store_user_data(user, chat_id : int):
     """Creates and updates the user data in the database"""
     user_data = {
@@ -55,7 +35,8 @@ def store_user_data(user, chat_id : int):
         "can_use_commands" : get_permission(user.id),
         "admin_status" : get_admin(user.id),
         "exclusive_sentence" : get_excl_sentence(user.id),
-        "notifications" : get_notification_status(user.id)
+        "notifications" : get_notification_status(user.id),
+        "localization" : get_lang(user.id)
         }
     users_table.upsert(user_data, User.user_id == user.id)
 
@@ -100,9 +81,22 @@ def logging_procedure(message, bot_answer : str):
     logger.info(f"Bot: {bot_answer}")
     log_file.write(f"Bot: {bot_answer}\n")
 
+def get_localized_string(source : str, lang : str, element : str = None):
+    """Returns the string from localizations.py in localizations[source][lang] and optionally elements"""
+    try:
+        if element: return localizations[source][lang][element]
+        return localizations[source][lang]
+    except KeyError:
+        try:
+            return localizations["not_found"][lang]
+        except KeyError:
+            return localizations["not_found"]["en"]
+
 def permission_denied_procedure(message, error_msg : str = ""):
     """Standard procedure, whenever a user doesn't have the permission to do a certain action"""
-    bot_answer = f"Non hai il permesso di usare questo comando!\n{error_msg}"
+    user = message.from_user
+    lang = get_lang(user.id)
+    bot_answer = f"{get_localized_string("permission_denied",lang,"default")}\n{get_localized_string("permission_denied",lang,error_msg)}"
     bot.reply_to(message,bot_answer)
     logging_procedure(message,bot_answer)
 
@@ -110,7 +104,7 @@ def send_on_off_notification(status : str):
     """Sends a notification whenever the bot turns on or off"""
     if not DEV_MODE:
         for user in users_table:
-            bot_answer = f"Il bot è {status}!"
+            bot_answer = f"{get_localized_string("notifications",get_lang(user["user_id"]),"bot")} {status}!"
             try: 
                 if user["chat_id"] and get_notification_status(user["user_id"]):
                     bot.send_message(user["chat_id"], bot_answer)
@@ -132,7 +126,8 @@ def generate_random_name() -> str:
 def generate_qrcode(message,chat_id):
     """Generates a qr code from a string of text"""
     user = message.from_user
-    bot_answer = "Inviato!"
+    lang = get_lang(user.id)
+    bot_answer = get_localized_string("sent",lang)
     img_path = f"qr_{user.id}.png"
     img = qrcode.make(message.text)
     img.save(img_path)
@@ -141,7 +136,7 @@ def generate_qrcode(message,chat_id):
             bot.send_photo(chat_id,code)
         os.remove(img_path)
     except Exception as e:
-        bot_answer = f"errore, per favore invia questo a {get_viewed_name(OWNER_ID)}: \n{e}"
+        bot_answer = f"{get_localized_string("qrcode",lang,"error")} {get_viewed_name(OWNER_ID)}: \n{e}"
     bot.reply_to(message, bot_answer)
     logging_procedure(message,bot_answer)
 
@@ -150,16 +145,17 @@ def set_botname(message, us_id : int, randomName=False):
     MAX_CHARS = 200
     user = message.from_user
     name = message.text
+    lang = get_lang(user.id)
     if randomName: name = generate_random_name()
     
     if len(name) > MAX_CHARS:
-        bot_answer = f"Riesegui il comando usando meno caratteri. max: {MAX_CHARS}"
+        bot_answer = f"{get_localized_string("set_name",lang,"max_chars")} Max: {MAX_CHARS}"
         bot.reply_to(message,bot_answer)
         logging_procedure(message,bot_answer)
         return
     
     if check_banned_name(name):
-        bot_answer = f"Riesegui il comando usando un nome consentito"
+        bot_answer = get_localized_string("set_name",lang,"name_banned")
         bot.reply_to(message,bot_answer)
         logging_procedure(message,bot_answer)
         return
@@ -169,26 +165,28 @@ def set_botname(message, us_id : int, randomName=False):
         target_viewed_name = get_viewed_name(us_id)
         user_doc[0]["bot_name"] = name
         if user.id == us_id:
-            bot_answer = f"Il tuo nome è ora {name}"
+            bot_answer = f"{get_localized_string("set_name",lang,"personal_name")} {name}"
         else:
-            bot_answer = f"Il nome di {target_viewed_name} è ora {name}"
-            user_data = { "bot_name" : name }
+            bot_answer = f"{get_localized_string("set_name",lang,"name_of")} {target_viewed_name} {get_localized_string("set_name",lang,"is_now")} {name}"
+            user_data = {"bot_name" : name}
             users_table.upsert(user_data, User.user_id == us_id)
 
-    else: bot_answer = "Utente non trovato"
+    else: bot_answer = get_localized_string("choose_text",lang,"not_found")
     bot.reply_to(message,bot_answer)
     logging_procedure(message,bot_answer)
 
 def reset_botname(message, us_id : int):
     """Reset the name of a user identified by us_id"""
     user_doc = users_table.search(User.user_id == us_id)
+    user = message.from_user
+    lang = get_lang(user.id)
     if user_doc:
         target_name = user_doc[0]["first_name"]
         user_data = {"bot_name" : None}
         users_table.upsert(user_data, User.user_id == us_id)
-        bot_answer = f"Nome di {target_name} resettato!"
+        bot_answer = f"{get_localized_string("set_name",lang,"name_of")} {target_name} {get_localized_string("set_name",lang,"resetted")}"
     else:
-        bot_answer = "Utente non trovato"
+        bot_answer = get_localized_string("choose_text",lang,"not_found")
     bot.reply_to(message,bot_answer)
     logging_procedure(message,bot_answer)
 
@@ -226,14 +224,16 @@ def get_chat_id(us_id : int) -> int | None:
 def set_permission(message,us_id : int):
     """Updates the status of a user from normal to restricted and vice versa"""
     if get_admin(us_id):
-        permission_denied_procedure(message, denied_messages["target_admin"])
+        permission_denied_procedure(message, "target_admin")
         return
     
     viewed_name = get_viewed_name(us_id)
+    user = message.from_user
+    lang = get_lang(user.id)
     if get_permission(us_id) == True:
-        bot_answer = f"Permessi di {viewed_name} bloccati!"
+        bot_answer = f"{get_localized_string("permission",lang,"permission_of")} {viewed_name} {get_localized_string("permission",lang,"locked")}"
     else:
-        bot_answer = f"Permessi di {viewed_name} sbloccati!"
+        bot_answer = f"{get_localized_string("permission",lang,"permission_of")} {viewed_name} {get_localized_string("permission",lang,"unlocked")}"
     user_data = {
         "can_use_commands" : not get_permission(us_id)
         }
@@ -251,6 +251,32 @@ def get_permission(us_id : int) -> bool:
             return True
     return True
 
+def set_lang(message, us_id : int):
+    """Change the bot language, for the user identified by us_id, into italian or english"""
+    viewed_name = get_viewed_name(us_id)
+    if get_lang(us_id) == "it":
+        bot_answer = f"{viewed_name} {get_localized_string("set_lang","en")}"
+        lang = "en"
+    else:
+        bot_answer = f"{viewed_name} {get_localized_string("set_lang","it")}"
+        lang = "it"
+    user_data = {
+        "localization" : lang
+        }
+    users_table.upsert(user_data, User.user_id == us_id)
+    bot.reply_to(message, bot_answer)
+    logging_procedure(message,bot_answer)
+
+def get_lang(us_id : int) -> str:
+    """Returns the user language code, if not found defaults to en"""
+    user_doc = users_table.search(User.user_id == us_id)
+    if user_doc: 
+        try: 
+            return user_doc[0]["localization"]
+        except KeyError:
+            return "en"
+    return "en"
+
 def get_admin(us_id : int) -> bool:
     """Return true if the user identified by us_id is admin, false otherwise"""
     user_doc = users_table.search(User.user_id == us_id)
@@ -266,10 +292,12 @@ def get_admin(us_id : int) -> bool:
 def set_admin(message,us_id : int):
     """Turn the user identified by us_id into an admin or vice versa"""
     viewed_name = get_viewed_name(us_id)
+    user = message.from_user
+    lang = get_lang(user.id)
     if get_admin(us_id) == True:
-        bot_answer = f"{viewed_name} non è più admin!"
+        bot_answer = f"{viewed_name} {get_localized_string("set_admin",lang,"remove")}"
     else:
-        bot_answer = f"{viewed_name} è ora admin!"
+        bot_answer = f"{viewed_name} {get_localized_string("set_admin",lang,"add")}"
     user_data = {
         "admin_status" : not get_admin(us_id)
         }
@@ -291,16 +319,17 @@ def set_excl_sentence(message, us_id : int):
     """Set a special sentence the user identified by us_id receives when greeted by the bot"""
     MAX_CHARS = 200
     user = message.from_user
+    lang = get_lang(user.id)
     sentence = message.text
     
     if len(sentence) > MAX_CHARS:
-        bot_answer = f"Riesegui il comando usando meno caratteri. max: {MAX_CHARS}"
+        bot_answer = f"{get_localized_string("set_name",lang,"max_chars")} Max: {MAX_CHARS}"
         bot.reply_to(message,bot_answer)
         logging_procedure(message, bot_answer)
         return
     
     if check_banned_name(sentence):
-        bot_answer = f"Riesegui il comando usando una frase con termini consentiti"
+        bot_answer = {get_localized_string("set_sentence",lang,"sentence_banned")}
         bot.reply_to(message,bot_answer)
         logging_procedure(message, bot_answer)
         return
@@ -311,15 +340,15 @@ def set_excl_sentence(message, us_id : int):
         if sentence.lower() == "none": sentence = None
         user_doc[0]["exclusive_sentence"] = sentence
         if user.id == us_id:
-            bot_answer = f"La tua frase è ora {sentence}"
+            bot_answer = f"{get_localized_string("set_sentence",lang,"personal_sentence")} {sentence}"
         else:
-            bot_answer = f"La frase di {target_viewed_name} è ora {sentence}"
+            bot_answer = f"{get_localized_string("set_sentence",lang,"sentence_of")} {target_viewed_name} {get_localized_string("set_name",lang,"is_now")} {sentence}"
             user_data = {
                 "exclusive_sentence" : sentence
             }
             users_table.upsert(user_data, User.user_id == us_id)
 
-    else: bot_answer = "Utente non trovato"
+    else: bot_answer = get_localized_string("choose_text",lang,"not_found")
     bot.reply_to(message,bot_answer)
     logging_procedure(message,bot_answer)
 
@@ -336,34 +365,38 @@ def get_excl_sentence(us_id : int) -> str | None:
 def get_info(message,us_id : int):
     """The bot sends a message with basic user informations"""
     user_doc = users_table.search(User.user_id == us_id)
+    user = message.from_user
+    lang = get_lang(user.id)
 
     if user_doc:
-        bot_answer = f"Nome utente: {user_doc[0]["first_name"]}\nCognome utente: {user_doc[0]["last_name"]}\nUsername: {user_doc[0]["username"]}\nUser ID: {user_doc[0]["user_id"]}\nNome in uso nel bot: {get_botname(us_id)}\nFrase personale: {get_excl_sentence(us_id)}\nNotifiche attivate: {get_notification_status(us_id)}\nAccount bloccato: {not get_permission(us_id)}\nAccount amministratore: {get_admin(us_id)}"
-    else: bot_answer = "Utente non trovato"
+        bot_answer = f"{get_localized_string("info",lang,"name")} {user_doc[0]["first_name"]}\n{get_localized_string("info",lang,"last_name")} {user_doc[0]["last_name"]}\nUsername: {user_doc[0]["username"]}\n{get_localized_string("info",lang,"user_id")} {user_doc[0]["user_id"]}\n{get_localized_string("info",lang,"bot_name")} {get_botname(us_id)}\n{get_localized_string("info",lang,"sentence")} {get_excl_sentence(us_id)}\n{get_localized_string("info",lang,"language")} {get_lang(us_id)}\n{get_localized_string("info",lang,"notification")} {get_notification_status(us_id)}\n{get_localized_string("info",lang,"blocked")} {not get_permission(us_id)}\n{get_localized_string("info",lang,"admin")} {get_admin(us_id)}"
+    else: bot_answer = get_localized_string("choose_text",lang,"not_found")
     bot.reply_to(message, bot_answer)
     logging_procedure(message,bot_answer)
 
 def send_message(message, chat_id : int):
     """Send a message to the chat identified by chat_id"""
     user = message.from_user
-    bot_answer = "Inviato!"
+    lang = get_lang(user.id)
+    bot_answer = get_localized_string("sent",lang)
     viewed_name = get_viewed_name(user.id)
-    message_to_send = f"Da: {viewed_name}({user.id}):\n{message.text}"
+    message_to_send = f"{get_localized_string("send_to", get_lang(chat_id), "from")} {viewed_name}({user.id}):\n{message.text}"
     try:
         bot.send_message(chat_id,message_to_send)
     except telebot.apihelper.ApiTelegramException:
-        bot_answer = "Errore, l'utente ha bloccato il bot"
+        bot_answer = get_localized_string("send_to",lang,"blocked")
     bot.reply_to(message,bot_answer)
     logging_procedure(message,bot_answer)
 
 def broadcast(message, admin_only=False):
     """Send a message to all the users of the bot, or if admin only to just the admins"""
-    user = message.from_user
-    user_name = get_viewed_name(user.id)
+    sender_user = message.from_user
+    user_name = get_viewed_name(sender_user.id)
 
     for user in users_table:
-        bot_answer = f"Annuncio di {user_name}:\n{message.text}"
-        if admin_only: bot_answer = f"Messaggio per gli admin di {user_name}:\n{message.text}"
+        lang = get_lang(user["user_id"])
+        bot_answer = f"{get_localized_string("broadcast",lang,"from")} {user_name}:\n{message.text}"
+        if admin_only: bot_answer = f"{get_localized_string("broadcast",lang,"admin_from")} {user_name}:\n{message.text}"
         try: 
             if user["chat_id"]:
                 if admin_only and user["admin_status"]:
@@ -371,11 +404,14 @@ def broadcast(message, admin_only=False):
                 if not admin_only:
                     bot.send_message(user["chat_id"], bot_answer)
         except (KeyError, telebot.apihelper.ApiTelegramException): pass
-    bot.reply_to(message,"Inviato!")
+    lang = get_lang(sender_user.id)
+    bot.reply_to(message,get_localized_string("sent",lang))
     logging_procedure(message,bot_answer)
 
 def choose_text(message,command : callable):
     """Second step of the admin framework, it takes in the required text argument of certain commands"""
+    admin_user = message.from_user
+    lang = get_lang(admin_user.id)
     user_doc = users_table.search(User.username == message.text)
     if user_doc:
         us_id = user_doc[0]["user_id"]
@@ -384,13 +420,13 @@ def choose_text(message,command : callable):
         if user_doc:
             us_id = user_doc[0]["user_id"]
         else:
-            bot_answer = "Utente non trovato"
+            bot_answer = get_localized_string("choose_text",lang,"not_found")
             bot.reply_to(message, bot_answer, reply_markup=types.ReplyKeyboardRemove())
             return
-    bot_answer = f"Utente selezionato {get_viewed_name(us_id)} ({us_id}). \nInserisci l'argomento:"
+    bot_answer = f"{get_localized_string("choose_text",lang,"selected")} {get_viewed_name(us_id)} ({us_id}). \n{get_localized_string("choose_text",lang,"argument")}"
 
-    if command == set_permission or command == reset_botname or command == set_admin or command == get_info:
-        bot_answer = f"Utente selezionato {get_viewed_name(us_id)} ({us_id})."
+    if command == set_permission or command == reset_botname or command == set_admin or command == get_info or command == set_lang:
+        bot_answer = f"{get_localized_string("choose_text",lang,"selected")} {get_viewed_name(us_id)} ({us_id})."
         bot.reply_to(message, bot_answer, reply_markup=types.ReplyKeyboardRemove())
         command(message,us_id)
         return
@@ -402,11 +438,11 @@ def choose_text(message,command : callable):
 def choose_target(message,command : callable):
     """First step of the admin framework, it specifies the user who the admin is targeting with its command. The admin framework let the admins reuse the functions written for normal use in a specific admin mode"""
     user = message.from_user
-    bot_answer = f"Inserisci l'id dell'utente: "
+    bot_answer = get_localized_string("choose_target",get_lang(user.id))
 
     admin_status = get_admin(user.id)
     if not admin_status:
-        permission_denied_procedure(message,denied_messages["admin_only"])
+        permission_denied_procedure(message,"admin_only")
         return
     
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True,one_time_keyboard=True,selective=True)
@@ -424,11 +460,13 @@ def choose_target(message,command : callable):
 def update_banned_words(message, word_type : str):
     """Updates the lists of banned worlds"""
     word = (message.text).lower()
+    user = message.from_user
+    lang = get_lang(user.id)
     banned_doc = banned_words_table.search(Word_type.type == word_type)
     if banned_doc:
         banned_list = banned_doc[0]["list"]
         if word in banned_list:
-            bot_answer = "Parola già bannata"
+            bot_answer = get_localized_string("banned_words", lang, "already_banned")
             bot.reply_to(message,bot_answer)
             logging_procedure(message,bot_answer)
             return
@@ -440,7 +478,7 @@ def update_banned_words(message, word_type : str):
         banned_list.append(word)
         list_data = {"list":banned_list, "type" : word_type}
         banned_words_table.upsert(list_data, Word_type.type == word_type)
-    bot_answer = f"{word} bannata"
+    bot_answer = f"{word} {get_localized_string("banned_words", lang, "banned")}"
     bot.reply_to(message,bot_answer)
     logging_procedure(message,bot_answer)
 
@@ -451,22 +489,35 @@ def get_banned_words(word_type) -> list:
     else: banned_list = []
     return banned_list
 
-bot.set_my_commands(commands)
+bot.set_my_commands(commands_en) #default
+bot.set_my_commands(commands_it, language_code="it")
 
 send_on_off_notification("online")
 
-@bot.message_handler(commands=["start","ciao"])
-def send_welcome(message):
+@bot.message_handler(commands=["lang"])
+def set_user_lang(message):
+    user = message.from_user
+
+    current_permission = get_permission(user.id)
+    if not current_permission:
+        permission_denied_procedure(message,"Blocked")
+        return
+    
+    set_lang(message, user.id)
+
+@bot.message_handler(commands=["start","hello"])
+def send_greets(message):
     """Greet the user with its name and a special sentence"""
     user = message.from_user
+    lang = get_lang(user.id)
     if get_botname(user.id): viewed_name = get_botname(user.id)
     else: viewed_name = user.first_name
 
     if get_excl_sentence(user.id): special_reply = get_excl_sentence(user.id)
     else: special_reply = ""
     
-    bot_answer = f"Ciao {viewed_name}!"
-    try: bot_answer = f"{bot_answer}\n {special_reply}"
+    bot_answer = f"{get_localized_string("greet",lang)} {viewed_name}!"
+    try: bot_answer = f"{bot_answer}\n{special_reply}"
     except KeyError: pass
 
     bot.reply_to(message,bot_answer)
@@ -475,11 +526,11 @@ def send_welcome(message):
 @bot.message_handler(commands=["setname"])
 def set_name(message):
     user = message.from_user
-    bot_answer = "Che nome vuoi usare?"
+    bot_answer = get_localized_string("set_name",get_lang(user.id),"prompt")
 
     current_permission = get_permission(user.id)
     if not current_permission:
-        permission_denied_procedure(message,denied_messages["Blocked"])
+        permission_denied_procedure(message,"Blocked")
         return
     
     bot.reply_to(message, bot_answer)
@@ -491,7 +542,7 @@ def reset_name(message):
     user = message.from_user
     current_permission = get_permission(user.id)
     if not current_permission:
-        permission_denied_procedure(message,denied_messages["Blocked"])
+        permission_denied_procedure(message, "Blocked")
         return
     
     reset_botname(message,user.id)
@@ -500,15 +551,12 @@ def reset_name(message):
 def send_to_owner(message):
     """Send a message to the owner of the bot"""
     user = message.from_user
-    if get_botname(OWNER_ID): owner_name = get_botname(OWNER_ID)
-    else: 
-        owner_doc = users_table.search(User.user_id == OWNER_ID)
-        if owner_doc: owner_name = owner_doc[0]["first_name"]
-    bot_answer = f"Che messaggio vuoi inviare a {owner_name}?"
+    owner_name = get_viewed_name(OWNER_ID)
+    bot_answer = f"{get_localized_string("send_to", get_lang(user.id),"user")} {owner_name}?"
 
     current_permission = get_permission(user.id)
     if not current_permission:
-        permission_denied_procedure(message,denied_messages["Blocked"])
+        permission_denied_procedure(message, "Blocked")
         return
     
     bot.reply_to(message, bot_answer)
@@ -519,11 +567,11 @@ def send_to_owner(message):
 def send_to_admin(message):
     """Send a message to all the admins of the bot"""
     user = message.from_user
-    bot_answer = f"Che messaggio vuoi inviare agli admin?"
+    bot_answer = get_localized_string("send_to", get_lang(user.id),"admins")
 
     current_permission = get_permission(user.id)
     if not current_permission:
-        permission_denied_procedure(message, denied_messages["Blocked"])
+        permission_denied_procedure(message, "Blocked")
         return
     
     bot.reply_to(message, bot_answer)
@@ -533,18 +581,25 @@ def send_to_admin(message):
 @bot.message_handler(commands=["eventstoday"])
 def events_on_wikipedia(message):
     """send a random event of the day from italian wikipedia"""
+    user = message.from_user
+    lang = get_lang(user.id)
     wikipedia.set_lang("it")
     engToIta = {"January": "gennaio", "February" : "febbraio", "March" : "marzo", "April" : "aprile", "May" : "maggio", "June" : "giugno",
                 "July" : "luglio", "August" : "agosto", "September" : "settembre", "October" : "ottobre" , "November" : "novembre", "December" : "dicembre"}
-    page_title = f"{date.today().day}_{engToIta[date.today().strftime("%B")]}"
+    month = engToIta[date.today().strftime("%B")] 
+    page_title = f"{date.today().day}_{month}"
+    section_name = "Eventi"
     try:
         page = wikipedia.page(page_title)
-        content = page.section("Eventi")
+        content = page.section(section_name)
         events_list = [line for line in content.split("\n")]
         event = random.choice(events_list)
+        if lang != "it":
+            translator = GoogleTranslator("it",lang)
+            event = translator.translate(event)
         bot_answer = f"{event}"
     except wikipedia.exceptions.PageError:
-        bot_answer = "pagina non trovata"
+        bot_answer = get_localized_string("wikipedia",lang,"page404")
     bot.reply_to(message,bot_answer)
     logging_procedure(message,bot_answer)
 
@@ -559,7 +614,7 @@ def random_name(message):
     user = message.from_user
     current_permission = get_permission(user.id)
     if not current_permission:
-        permission_denied_procedure(message, denied_messages["Blocked"])
+        permission_denied_procedure(message, "Blocked")
         return
     
     set_botname(message,user.id,True)
@@ -567,11 +622,12 @@ def random_name(message):
 @bot.message_handler(commands=["notifications"])
 def set_notifications(message):
     user = message.from_user
+    lang = get_lang(user.id)
     
     if get_notification_status(user.id):
-        bot_answer = "Notifiche disattivate"
+        bot_answer = get_localized_string("notifications",lang,"off")
     else:
-        bot_answer = "Notifiche attivate"
+        bot_answer = get_localized_string("notifications",lang,"on")
 
     user_data = {"notifications" : not get_notification_status(user.id)}
     users_table.upsert(user_data, User.user_id == user.id)
@@ -585,10 +641,10 @@ def request_qrcode(message):
     chat_id = get_chat_id(user.id)
     current_permission = get_permission(user.id)
     if not current_permission:
-        permission_denied_procedure(message, denied_messages["Blocked"])
+        permission_denied_procedure(message, "Blocked")
         return
     
-    bot_answer = "Inviami del testo e genererò un QR code"
+    bot_answer = get_localized_string("qrcode",get_lang(user.id),"msg_to_send")
     bot.reply_to(message,bot_answer)
     bot.register_next_step_handler(message, generate_qrcode,chat_id)
     logging_procedure(message,bot_answer)
@@ -600,10 +656,11 @@ def info(message):
 
 @bot.message_handler(commands=["about"])
 def about(message):
+    user = message.from_user
     markup = types.InlineKeyboardMarkup()
     button = types.InlineKeyboardButton("Github",url="github.com/Giu27/SupergiuToolsBot")
     markup.row(button)
-    bot_answer = "IT: Bot sviluppato da @Supergiuchannel, il codice è disponibile su github.\nEN: Bot developed by @Supergiuchannel, the code is available on github."
+    bot_answer = get_localized_string("about",get_lang(user.id))
     bot.reply_to(message,bot_answer, reply_markup=markup)
     logging_procedure(message,bot_answer)
 
@@ -619,7 +676,7 @@ def set_person_permission(message):
 def set_person_admin(message):
     user = message.from_user
     if user.id != OWNER_ID:
-        permission_denied_procedure(message, denied_messages["owner_only"])
+        permission_denied_procedure(message, "owner_only")
         return
     choose_target(message, set_admin)
 
@@ -635,6 +692,10 @@ def reset_person_name(message):
 def get_person_info(message):
     choose_target(message,get_info)
 
+@bot.message_handler(commands=["setpersonlang"])
+def set_person_lang(message):
+    choose_target(message, set_lang)
+
 @bot.message_handler(commands=["getids"])
 def get_ids(message):
     user = message.from_user
@@ -642,7 +703,7 @@ def get_ids(message):
 
     admin_status = get_admin(user.id)
     if not admin_status:
-        permission_denied_procedure(message,denied_messages["admin_only"])
+        permission_denied_procedure(message, "admin_only")
         return
     
     for user in users_table:
@@ -661,11 +722,11 @@ def send_to_target(message):
 @bot.message_handler(commands=["broadcast"])
 def send_in_broadcast(message):
     user = message.from_user
-    bot_answer = "Che messaggio vuoi inviare in broadcast"
+    bot_answer = get_localized_string("broadcast", get_lang(user.id), "msg_to_send")
 
     admin_status = get_admin(user.id)
     if not admin_status:
-        permission_denied_procedure(message, denied_messages["admin_only"])
+        permission_denied_procedure(message, "admin_only")
         return
     
     bot.reply_to(message, bot_answer)
@@ -675,11 +736,11 @@ def send_in_broadcast(message):
 @bot.message_handler(commands=["addbanned"])
 def add_banned_word(message):
     user = message.from_user
-    bot_answer = "Che parola vuoi vietare?"
+    bot_answer = get_localized_string("banned_words",get_lang(user.id),"add_banned")
 
     admin_status = get_admin(user.id)
     if not admin_status:
-        permission_denied_procedure(message, denied_messages["admin_only"])
+        permission_denied_procedure(message, "admin_only")
         return
     
     bot.reply_to(message, bot_answer)
@@ -689,11 +750,11 @@ def add_banned_word(message):
 @bot.message_handler(commands=["addultrabanned"])
 def add_ultra_banned_word(message):
     user = message.from_user
-    bot_answer = "Che parola vuoi iper vietare?"
+    bot_answer = get_localized_string("banned_words",get_lang(user.id),"add_ultrabanned")
 
     admin_status = get_admin(user.id)
     if not admin_status:
-        permission_denied_procedure(message, denied_messages["admin_only"])
+        permission_denied_procedure(message, "admin_only")
         return
     
     bot.reply_to(message, bot_answer)
@@ -703,8 +764,9 @@ def add_ultra_banned_word(message):
 @bot.message_handler(content_types=["photo","video","sticker","animation","document","audio","voice"])
 def handle_media(message):
     user = message.from_user
-    bot_answer = f"Ciao {get_viewed_name(user.id)}, ho perso gli occhiali e non posso visualizzare questo contenuto"
-    if (message.voice or message.audio): bot_answer = f"Ciao {get_viewed_name(user.id)}, ho perso le cuffie e non posso ascoltare questo contenuto"
+    lang = get_lang(user.id)
+    bot_answer = f"{get_localized_string("greet",lang)} {get_viewed_name(user.id)}, {get_localized_string("handle_media",lang,"image")}"
+    if (message.voice or message.audio): bot_answer = f"{get_localized_string("greet",lang)} {get_viewed_name(user.id)}, {get_localized_string("handle_media",lang,"audio")}"
     bot.reply_to(message, bot_answer)
     logging_procedure(message,bot_answer)
 
