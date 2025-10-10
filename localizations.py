@@ -34,8 +34,8 @@ commands_en = [
 
 localizations = {
     "not_found" : {
-        "en" : "Reply not found.",
-        "it" : "Risposta non trovata."
+        "en" : "Reply not found for the selected language.",
+        "it" : "Risposta non trovata per la lingua selezionata."
     },
     "permission_denied" : {
         "en" : {
@@ -194,7 +194,7 @@ localizations = {
         "it" : {
             "permission_of" : "Permessi di",
             "locked" : "bloccati!",
-            "unlocked" : "enabled!"
+            "unlocked" : "sbloccati!"
         }
     },
     "set_admin" : {
