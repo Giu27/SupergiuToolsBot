@@ -456,7 +456,7 @@ def choose_text(message,command : callable):
             return
     bot_answer = f"{get_localized_string("choose_text",lang,"selected")} {get_viewed_name(us_id)} ({us_id}). \n{get_localized_string("choose_text",lang,"argument")}"
 
-    if command == set_permission or command == reset_botname or command == set_admin or command == get_info or command == set_lang:
+    if command == set_permission or command == reset_botname or command == set_admin or command == get_info or command == set_lang or command == set_gender:
         bot_answer = f"{get_localized_string("choose_text",lang,"selected")} {get_viewed_name(us_id)} ({us_id})."
         bot.reply_to(message, bot_answer, reply_markup=types.ReplyKeyboardRemove())
         command(message,us_id)
