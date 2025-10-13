@@ -36,7 +36,8 @@ def store_user_data(user, chat_id : int):
         "admin_status" : get_admin(user.id),
         "exclusive_sentence" : get_excl_sentence(user.id),
         "notifications" : get_notification_status(user.id),
-        "localization" : get_lang(user.id)
+        "localization" : get_lang(user.id),
+        "gender" : get_gender(user.id)
         }
     users_table.upsert(user_data, User.user_id == user.id)
 
@@ -111,15 +112,17 @@ def send_on_off_notification(status : str):
                     logger.info(f"Bot: {bot_answer}. chat_id: {user["chat_id"]}")
             except (KeyError, telebot.apihelper.ApiTelegramException): pass
 
-def generate_random_name() -> str:
+def generate_random_name(gender : str) -> str:
     """Return a random name between names from Italian, english, French, Ukranian, greek and japanese names"""
     langs = ["it_IT", "en_UK", "fr_Fr","uk_UA","el_GR","ja_JP"]
     lang = random.choice(langs)
     fake = faker.Faker(lang)
     if lang == "ja_JP":
-        name = fake.first_romanized_name()
+        if gender == 'f': name = fake.first_romanized_name_female()
+        else: name = fake.first_romanized_name_male()
     else:
-        name = fake.first_name()
+        if gender == 'f': name = fake.first_name_female()
+        else: name = fake.first_name_male()
         name = unidecode.unidecode(name)
     return name
 
@@ -146,7 +149,7 @@ def set_botname(message, us_id : int, randomName=False):
     user = message.from_user
     name = message.text
     lang = get_lang(user.id)
-    if randomName: name = generate_random_name()
+    if randomName: name = generate_random_name(get_gender(us_id))
     
     if len(name) > MAX_CHARS:
         bot_answer = f"{get_localized_string("set_name",lang,"max_chars")} Max: {MAX_CHARS}"
@@ -277,6 +280,34 @@ def get_lang(us_id : int) -> str:
             return "en"
     return "en"
 
+def set_gender(message, us_id : int):
+    """Change the gender of the name chosen by randomname, for the user identified by us_id, into male or female"""
+    viewed_name = get_viewed_name(us_id)
+    user = message.from_user
+    lang = get_lang(user.id)
+    if get_gender(us_id) == "m":
+        bot_answer = f"{viewed_name} {get_localized_string("set_gender",lang,"f")}"
+        gender = "f"
+    else:
+        bot_answer = f"{viewed_name} {get_localized_string("set_gender",lang,"m")}"
+        gender = "m"
+    user_data = {
+        "gender" : gender
+        }
+    users_table.upsert(user_data, User.user_id == us_id)
+    bot.reply_to(message, bot_answer)
+    logging_procedure(message,bot_answer)
+
+def get_gender(us_id : int) -> str:
+    """Returns the user gender, if not found defaults to m(ale)"""
+    user_doc = users_table.search(User.user_id == us_id)
+    if user_doc: 
+        try: 
+            return user_doc[0]["gender"]
+        except KeyError:
+            return "m"
+    return "m"
+
 def get_admin(us_id : int) -> bool:
     """Return true if the user identified by us_id is admin, false otherwise"""
     user_doc = users_table.search(User.user_id == us_id)
@@ -369,7 +400,7 @@ def get_info(message,us_id : int):
     lang = get_lang(user.id)
 
     if user_doc:
-        bot_answer = f"{get_localized_string("info",lang,"name")} {user_doc[0]["first_name"]}\n{get_localized_string("info",lang,"last_name")} {user_doc[0]["last_name"]}\nUsername: {user_doc[0]["username"]}\n{get_localized_string("info",lang,"user_id")} {user_doc[0]["user_id"]}\n{get_localized_string("info",lang,"bot_name")} {get_botname(us_id)}\n{get_localized_string("info",lang,"sentence")} {get_excl_sentence(us_id)}\n{get_localized_string("info",lang,"language")} {get_lang(us_id)}\n{get_localized_string("info",lang,"notification")} {get_notification_status(us_id)}\n{get_localized_string("info",lang,"blocked")} {not get_permission(us_id)}\n{get_localized_string("info",lang,"admin")} {get_admin(us_id)}"
+        bot_answer = f"{get_localized_string("info",lang,"name")} {user_doc[0]["first_name"]}\n{get_localized_string("info",lang,"last_name")} {user_doc[0]["last_name"]}\nUsername: {user_doc[0]["username"]}\n{get_localized_string("info",lang,"user_id")} {user_doc[0]["user_id"]}\n{get_localized_string("info",lang,"bot_name")} {get_botname(us_id)}\n{get_localized_string("info",lang,"sentence")} {get_excl_sentence(us_id)}\n{get_localized_string("info",lang,"language")} {get_lang(us_id)}\n{get_localized_string("info",lang,"gender")} {get_gender(us_id)}\n{get_localized_string("info",lang,"notification")} {get_notification_status(us_id)}\n{get_localized_string("info",lang,"blocked")} {not get_permission(us_id)}\n{get_localized_string("info",lang,"admin")} {get_admin(us_id)}"
     else: bot_answer = get_localized_string("choose_text",lang,"not_found")
     bot.reply_to(message, bot_answer)
     logging_procedure(message,bot_answer)
@@ -578,6 +609,17 @@ def send_to_admin(message):
     bot.register_next_step_handler(message,broadcast,True)
     logging_procedure(message,bot_answer)
 
+@bot.message_handler(commands=["gender"])
+def set_user_gender(message):
+    user = message.from_user
+
+    current_permission = get_permission(user.id)
+    if not current_permission:
+        permission_denied_procedure(message,"Blocked")
+        return
+    
+    set_gender(message, user.id)
+
 @bot.message_handler(commands=["eventstoday"])
 def events_on_wikipedia(message):
     """send a random event of the day from italian wikipedia"""
@@ -695,6 +737,10 @@ def get_person_info(message):
 @bot.message_handler(commands=["setpersonlang"])
 def set_person_lang(message):
     choose_target(message, set_lang)
+
+@bot.message_handler(commands=["setpersongender"])
+def set_person_lang(message):
+    choose_target(message, set_gender)
 
 @bot.message_handler(commands=["getids"])
 def get_ids(message):

@@ -9,6 +9,7 @@ commands_it = [
     types.BotCommand("sendtoowner","Invia un messaggio all'owner"),
     types.BotCommand("sendtoadmin","Invia un messaggio a tutti gli admin"),
     types.BotCommand("eventstoday","Restituisce curiosità storiche sulla data di oggi"),
+    types.BotCommand("gender","Permette all'utente di cambiare il genere utilizzato da randomname"),
     types.BotCommand("randomnumber","Restituisce un numero casuale tra 0 e 999"),
     types.BotCommand("randomname","Imposta un nome casuale"),
     types.BotCommand("qrcode", "Crea un QR Code di un contenuto testuale inviato"),
@@ -24,6 +25,7 @@ commands_en = [
     types.BotCommand("sendtoowner","Send a message to the bot's owner"),
     types.BotCommand("sendtoadmin","Send a message to the bot's admins"),
     types.BotCommand("eventstoday","Return a fun fact about this day in history"),
+    types.BotCommand("gender","Let user change the gender used by randomname"),
     types.BotCommand("randomnumber","Return a random number in the 0 to 999 range"),
     types.BotCommand("randomname","Set a random name"),
     types.BotCommand("qrcode", "Let the user creates a QR Code from text"),
@@ -219,6 +221,16 @@ localizations = {
             "sentence_of" : "La frase di",
         },
     },
+    "set_gender" : {
+        "en" : {
+            "m" : "will now be considered male.",
+            "f" : "will now be considered female.",
+        },
+        "it" : {
+            "m" : "sarà ora considerato maschio.",
+            "f" : "sarà ora considerata femmina.",
+        },
+    },
     "info" : {
         "en" : {
             "name" : "First name:",
@@ -229,7 +241,8 @@ localizations = {
             "language" : "Language:",
             "notification" : "Notifications on:",
             "blocked" : "Restricted account:",
-            "admin" : "Admin account:"
+            "admin" : "Admin account:",
+            "gender" : "Gender:"
         },
         "it" : {
             "name" : "Nome:",
@@ -240,7 +253,8 @@ localizations = {
             "language" : "Lingua:",
             "notification" : "Notifiche attive:",
             "blocked" : "Account bloccato:",
-            "admin" : "Account admin:"
+            "admin" : "Account admin:",
+            "gender" : "Genere:"
         },
     }
 }
