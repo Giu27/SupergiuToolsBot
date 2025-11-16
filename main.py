@@ -257,7 +257,7 @@ def get_permission(us_id : int, command : str = None) -> bool | dict:
     if user_doc:
         if command == None: 
             try:
-                if user_doc[0]["commands"]: return user_doc[0]["commands"]
+                if user_doc[0]["commands"] != None: return user_doc[0]["commands"]
                 else: return {}
             except KeyError:
                 return {}
@@ -581,6 +581,7 @@ def set_user_lang(message):
 def send_greets(message):
     """Greet the user with its name and a special sentence"""
     user = message.from_user
+    store_user_data(user, message.chat.id)
     lang = get_lang(user.id)
     if get_botname(user.id): viewed_name = get_botname(user.id)
     else: viewed_name = user.first_name
