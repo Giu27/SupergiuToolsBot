@@ -412,8 +412,8 @@ def send_message(message, chat_id : int, scope : str = None, aknowledge : bool =
     bot_answer = get_localized_string("sent",lang)
     viewed_name = get_viewed_name(user.id)
     from_text = f"{get_localized_string("send_to", get_lang(chat_id), "from")} {viewed_name}({user.id}):"
-    if scope == 'B': from_text = f"{get_localized_string("broadcast",lang,"from")} {viewed_name}:"
-    if scope == 'A': from_text = f"{get_localized_string("broadcast",lang,"admin_from")} {viewed_name}:"
+    if scope == 'B': from_text = f"{get_localized_string("broadcast",get_lang(chat_id),"from")} {viewed_name}:"
+    if scope == 'A': from_text = f"{get_localized_string("broadcast",get_lang(chat_id),"admin_from")} {viewed_name}:"
 
     if message.content_type in ("text", "photo", "audio", "voice"):
         try:
