@@ -149,7 +149,7 @@ def set_botname(message, us_id : int, randomName=False):
     user = message.from_user
     name = message.text
     lang = get_lang(user.id)
-    if randomName: name = generate_random_name(get_gender(us_id))
+    if randomName or name == "-r": name = generate_random_name(get_gender(us_id))
     
     if len(name) > MAX_CHARS:
         bot_answer = f"{get_localized_string("set_name",lang,"max_chars")} Max: {MAX_CHARS}"
@@ -405,39 +405,55 @@ def get_info(message,us_id : int):
     bot.reply_to(message, bot_answer)
     logging_procedure(message,bot_answer)
 
-def send_message(message, chat_id : int):
+def send_message(message, chat_id : int, scope : str = None, aknowledge : bool = True):
     """Send a message to the chat identified by chat_id"""
     user = message.from_user
     lang = get_lang(user.id)
     bot_answer = get_localized_string("sent",lang)
     viewed_name = get_viewed_name(user.id)
-    message_to_send = f"{get_localized_string("send_to", get_lang(chat_id), "from")} {viewed_name}({user.id}):\n{message.text}"
-    try:
-        bot.send_message(chat_id,message_to_send)
-    except telebot.apihelper.ApiTelegramException:
-        bot_answer = get_localized_string("send_to",lang,"blocked")
-    bot.reply_to(message,bot_answer)
-    logging_procedure(message,bot_answer)
+    from_text = f"{get_localized_string("send_to", get_lang(chat_id), "from")} {viewed_name}({user.id}):"
+    if scope == 'B': from_text = f"{get_localized_string("broadcast",lang,"from")} {viewed_name}:"
+    if scope == 'A': from_text = f"{get_localized_string("broadcast",lang,"admin_from")} {viewed_name}:"
+
+    if message.content_type in ("text", "photo", "audio", "voice"):
+        try:
+            bot.send_message(chat_id,from_text)
+            if message.content_type == "text":
+                bot.send_message(chat_id,message.text)
+            elif message.content_type == "photo":
+                file_id = message.photo[-1].file_id
+                caption = message.caption if message.caption else None
+                bot.send_photo(chat_id,file_id,caption)
+            elif message.content_type == "audio":
+                file_id = message.audio.file_id
+                caption = message.caption if message.caption else None
+                bot.send_audio(chat_id,file_id,caption)
+            elif message.content_type == "voice":
+                file_id = message.voice.file_id
+                caption = message.caption if message.caption else None
+                bot.send_voice(chat_id,file_id,caption)          
+        except telebot.apihelper.ApiTelegramException:
+            bot_answer = get_localized_string("send_to",lang,"blocked")
+    else:
+        bot_answer = get_localized_string("send_to",lang,"unsupported")
+        
+    if aknowledge: 
+        bot.reply_to(message,bot_answer)
+        logging_procedure(message,bot_answer)
 
 def broadcast(message, admin_only=False):
     """Send a message to all the users of the bot, or if admin only to just the admins"""
-    sender_user = message.from_user
-    user_name = get_viewed_name(sender_user.id)
-
+    aknowledge = True
     for user in users_table:
-        lang = get_lang(user["user_id"])
-        bot_answer = f"{get_localized_string("broadcast",lang,"from")} {user_name}:\n{message.text}"
-        if admin_only: bot_answer = f"{get_localized_string("broadcast",lang,"admin_from")} {user_name}:\n{message.text}"
         try: 
             if user["chat_id"]:
                 if admin_only and user["admin_status"]:
-                    bot.send_message(user["chat_id"], bot_answer)
+                    send_message(message, user["chat_id"], 'A', aknowledge)
+                    aknowledge = False
                 if not admin_only:
-                    bot.send_message(user["chat_id"], bot_answer)
+                    send_message(message, user["chat_id"], 'B', aknowledge)
+                    aknowledge = False
         except (KeyError, telebot.apihelper.ApiTelegramException): pass
-    lang = get_lang(sender_user.id)
-    bot.reply_to(message,get_localized_string("sent",lang))
-    logging_procedure(message,bot_answer)
 
 def choose_text(message,command : callable):
     """Second step of the admin framework, it takes in the required text argument of certain commands"""
@@ -824,8 +840,10 @@ def log(message):
     store_user_data(user,message.chat.id)
     if user.username: user_info = user.username
     else: user_info = f"{user.first_name} {user.last_name}"
-    logger.info(f"{user.id}, {user_info}: {message.text}")
-    log_file.write(f"{user.id}, {user_info}: {message.text}\n")
+    if message.content_type == "text": content = message.text
+    else: content = message.content_type
+    logger.info(f"{user.id}, {user_info}: {content}")
+    log_file.write(f"{user.id}, {user_info}: {content}\n")
     
 bot.infinity_polling()
 

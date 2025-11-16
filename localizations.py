@@ -158,13 +158,15 @@ localizations = {
             "admins" : "What do you want to send to bot admins?",
             "user" : "What do you want to send to",
             "from" : "From",
-            "blocked" : "Error, the user blocked the bot."
+            "blocked" : "Error, the user blocked the bot.",
+            "unsupported" : "Error, the file type isn't supported"
         },
         "it" : {
             "admins" : "Che messaggio vuoi inviare agli admin?",
             "user" : "Che messaggio vuoi inviare a",
             "from" : "Da",
-            "blocked" : "Errore, l'utente ha bloccato il bot"
+            "blocked" : "Errore, l'utente ha bloccato il bot",
+            "unsupported" : "Errore, il tipo di file non è supportato."
         },
     },
     "set_name" : {
