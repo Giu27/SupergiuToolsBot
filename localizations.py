@@ -44,15 +44,15 @@ localizations = {
             "default" : "You don't have the right to use this command!",
             "target_admin" : "You can't target an admin.",
             "owner_only" : "You must be owner.",
-            "admin_only" : "You must be admin.",
-            "Blocked" : "Your account is subject to restrictions."
+            "admin_only" : "You must be admin with the right permissions.",
+            "Blocked" : "Your use of the command is subject to restrictions."
         },
         "it" : {
             "default" : "Non hai il permesso di usare questo comando!",
             "target_admin" : "Non puoi bloccare un admin.",
             "owner_only" : "Devi essere owner.",
-            "admin_only" : "Devi essere admin.",
-            "Blocked" : "Il tuo account è soggetto a restrizioni."
+            "admin_only" : "Devi essere admin con i giusti permessi.",
+            "Blocked" : "Il tuo uso del comando è soggetto a restrizioni."
         },
     },
     "notifications" : {
@@ -191,14 +191,14 @@ localizations = {
     },
     "permission" : {
         "en" : {
-            "permission_of" : "Rights of",
+            "permission_of" : "Use of command by",
             "locked" : "disabled!",
             "unlocked" : "enabled!"
         },
         "it" : {
-            "permission_of" : "Permessi di",
-            "locked" : "bloccati!",
-            "unlocked" : "sbloccati!"
+            "permission_of" : "Uso del comando di",
+            "locked" : "bloccato!",
+            "unlocked" : "sbloccato!"
         }
     },
     "set_admin" : {
@@ -242,7 +242,6 @@ localizations = {
             "sentence" : "Personal sentence:",
             "language" : "Language:",
             "notification" : "Notifications on:",
-            "blocked" : "Restricted account:",
             "admin" : "Admin account:",
             "gender" : "Gender:"
         },
@@ -254,7 +253,6 @@ localizations = {
             "sentence" : "Frase personale:",
             "language" : "Lingua:",
             "notification" : "Notifiche attive:",
-            "blocked" : "Account bloccato:",
             "admin" : "Account admin:",
             "gender" : "Genere:"
         },
