@@ -227,7 +227,7 @@ def get_chat_id(us_id : int) -> int | None:
 def set_permission(message, us_id : int):
     """Updates the status of a user from normal to restricted and vice versa"""
     user = message.from_user
-    if get_admin(us_id) and us_id != user.id:
+    if get_admin(us_id) and us_id != user.id and user.id != OWNER_ID:
         permission_denied_procedure(message, "target_admin")
         return
     
@@ -259,16 +259,19 @@ def get_permission(us_id : int, command : str = None) -> bool | dict:
             try:
                 if user_doc[0]["commands"] != None: return user_doc[0]["commands"]
                 else: return {}
-            except KeyError:
-                return {}
+            except KeyError: return {}
         try:
-            return user_doc[0]["commands"][command]
+            if user_doc[0]["commands"][command] != None: return user_doc[0]["commands"][command]
+            else: raise KeyError
         except KeyError:
             data = user_doc[0]["commands"]
             data[command] = True
             user_data = {"commands" : data}
             users_table.upsert(user_data, User.user_id == us_id)
             return True
+        except TypeError:
+            users_table.upsert({"commands" : {}}, User.user_id == us_id)
+            return get_permission(us_id, command)
 
 def set_lang(message, us_id : int):
     """Change the bot language, for the user identified by us_id, into italian or english"""
@@ -581,7 +584,6 @@ def set_user_lang(message):
 def send_greets(message):
     """Greet the user with its name and a special sentence"""
     user = message.from_user
-    store_user_data(user, message.chat.id)
     lang = get_lang(user.id)
     if get_botname(user.id): viewed_name = get_botname(user.id)
     else: viewed_name = user.first_name
@@ -590,8 +592,7 @@ def send_greets(message):
     else: special_reply = ""
     
     bot_answer = f"{get_localized_string("greet",lang)} {viewed_name}!"
-    try: bot_answer = f"{bot_answer}\n{special_reply}"
-    except KeyError: pass
+    bot_answer = f"{bot_answer}\n{special_reply}"
 
     bot.reply_to(message,bot_answer)
     logging_procedure(message,bot_answer)
