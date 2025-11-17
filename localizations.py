@@ -15,6 +15,7 @@ commands_it = [
     types.BotCommand("qrcode", "Crea un QR Code di un contenuto testuale inviato"),
     types.BotCommand("notifications","Attiva/Disattiva le notifiche"),
     types.BotCommand("info","Restituisce le informazioni memorizzate dal bot"),
+    types.BotCommand("permissionlist","Restituisce lo stato attuale dei permessi per i vari comandi"),
     types.BotCommand("about","Restituisce informazioni sul bot")
 ]
 commands_en = [
@@ -31,6 +32,7 @@ commands_en = [
     types.BotCommand("qrcode", "Let the user creates a QR Code from text"),
     types.BotCommand("notifications","Turn on/off the notifications"),
     types.BotCommand("info","Return the infos the bot has about you"),
+    types.BotCommand("permissionlist","Return current permissions status for the various commands"),
     types.BotCommand("about","Return infos about the bot")
 ]
 
@@ -193,12 +195,14 @@ localizations = {
         "en" : {
             "permission_of" : "Use of command by",
             "locked" : "disabled!",
-            "unlocked" : "enabled!"
+            "unlocked" : "enabled!",
+            "list" : "Commands permission list for"
         },
         "it" : {
             "permission_of" : "Uso del comando di",
             "locked" : "bloccato!",
-            "unlocked" : "sbloccato!"
+            "unlocked" : "sbloccato!",
+            "list" : "Lista dei permessi per i comandi di"
         }
     },
     "set_admin" : {

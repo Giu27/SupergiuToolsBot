@@ -272,6 +272,20 @@ def get_permission(us_id : int, command : str = None) -> bool | dict:
         except TypeError:
             users_table.upsert({"commands" : {}}, User.user_id == us_id)
             return get_permission(us_id, command)
+    return None
+
+def get_permissions_list(message, us_id : int):
+    user = message.from_user
+    lang = get_lang(user.id)
+
+    if get_permission(us_id):
+        bot_answer = f"{get_localized_string("permission", lang, "list")} {get_viewed_name(us_id)}: \n"
+        for command, permission in get_permission(us_id).items():
+            bot_answer += f"{command}: {permission};\n"
+    else: bot_answer = get_localized_string("choose_text",lang,"not_found")
+
+    bot.reply_to(message, bot_answer)
+    logging_procedure(message,bot_answer)
 
 def set_lang(message, us_id : int):
     """Change the bot language, for the user identified by us_id, into italian or english"""
@@ -492,7 +506,7 @@ def choose_text(message,command : callable):
             return
     bot_answer = f"{get_localized_string("choose_text",lang,"selected")} {get_viewed_name(us_id)} ({us_id}). \n{get_localized_string("choose_text",lang,"argument")}"
 
-    if command == reset_botname or command == set_admin or command == get_info or command == set_lang or command == set_gender:
+    if command == get_permissions_list or command == reset_botname or command == set_admin or command == get_info or command == set_lang or command == set_gender:
         bot_answer = f"{get_localized_string("choose_text",lang,"selected")} {get_viewed_name(us_id)} ({us_id})."
         bot.reply_to(message, bot_answer, reply_markup=types.ReplyKeyboardRemove())
         command(message,us_id)
@@ -739,6 +753,11 @@ def info(message):
     user = message.from_user
     get_info(message,user.id)
 
+@bot.message_handler(commands=["permissionlist"])
+def permissions_list(message):
+    user = message.from_user
+    get_permissions_list(message,user.id)
+
 @bot.message_handler(commands=["about"])
 def about(message):
     user = message.from_user
@@ -768,6 +787,15 @@ def set_person_permission(message):
         return
     
     choose_target(message, set_permission)
+
+@bot.message_handler(commands=["getpersonpermission"])
+def get_person_permissions(message):
+    user = message.from_user
+    permission = get_permission(user.id, "getpersonpermission")
+    if not permission:
+        permission_denied_procedure(message, "admin_only")
+        return
+    choose_target(message, get_permissions_list)
 
 @bot.message_handler(commands=["setpersonadmin"])
 def set_person_admin(message):
