@@ -45,8 +45,8 @@ def check_banned_name(name : str) -> bool:
     """Return true if name is banned, false otherwise"""
     banned_words = get_banned_words("banned")
     ultra_banned_words = get_banned_words("ultrabanned")
-    numToCh = [{'1' : 'i','3' : 'e','4' : 'r', '0' : 'o', '7' : 'l', '5' : 's','$': 'e','€':'e','т' : 't', 'п' : 'n', '\u03c5' : 'u', '\u0435' : 'e'},
-                {'1' : 'i','3' : 'e','4' : 'a', '0' : 'o', '7' : 'l', '5' : 's','$': 'e','€':'e','т' : 't','п' : 'n', '\u03c5' : 'u', '\u0435' : 'e'}]
+    numToCh = [{'1' : 'i','3' : 'e','4' : 'r', '0' : 'o', '7' : 'l', '5' : 's','$': 'e','€':'e','т' : 't', 'п' : 'n', '\u03c5' : 'u', '\u0435' : 'e', 'ε' : 'e'},
+                {'1' : 'i','3' : 'e','4' : 'a', '0' : 'o', '7' : 'l', '5' : 's','$': 'e','€':'e','т' : 't','п' : 'n', '\u03c5' : 'u', '\u0435' : 'e', 'ε' : 'e'}]
     for charset in numToCh:
         wordname = ""
         for char in name:
@@ -528,28 +528,43 @@ def choose_target(message,command : callable, second_arg : str = True):
     bot.register_next_step_handler(message, choose_text,command, second_arg)
     logging_procedure(message,bot_answer)
 
-def update_banned_words(message, word_type : str):
+def add_banned_words(message, word_type : str):
     """Updates the lists of banned worlds"""
     word = (message.text).lower()
     user = message.from_user
     lang = get_lang(user.id)
-    banned_doc = banned_words_table.search(Word_type.type == word_type)
-    if banned_doc:
-        banned_list = banned_doc[0]["list"]
-        if word in banned_list:
-            bot_answer = get_localized_string("banned_words", lang, "already_banned")
-            bot.reply_to(message,bot_answer)
-            logging_procedure(message,bot_answer)
-            return
-        banned_list.append(word)
-        list_data = {"list":banned_list, "type" : word_type}
-        banned_words_table.upsert(list_data, Word_type.type == word_type)
-    else:
-        banned_list = []
-        banned_list.append(word)
-        list_data = {"list":banned_list, "type" : word_type}
-        banned_words_table.upsert(list_data, Word_type.type == word_type)
+    banned_list = get_banned_words(word_type)
+
+    if word in banned_list:
+        bot_answer = get_localized_string("banned_words", lang, "already_banned")
+        bot.reply_to(message,bot_answer)
+        logging_procedure(message,bot_answer)
+        return
+    banned_list.append(word)
+    list_data = {"list":banned_list, "type" : word_type}
+    banned_words_table.upsert(list_data, Word_type.type == word_type)
+
     bot_answer = f"{word} {get_localized_string("banned_words", lang, "banned")}"
+    bot.reply_to(message,bot_answer)
+    logging_procedure(message,bot_answer)
+
+def remove_banned_words(message, word_type : str):
+    """Remove a word from the banned list"""
+    word = (message.text).lower()
+    user = message.from_user
+    lang = get_lang(user.id)
+    banned_list = get_banned_words(word_type)
+
+    if word in banned_list:
+        banned_list.remove(word)
+        bot_answer = f"{word} {get_localized_string("banned_words", lang, "unbanned")}"
+        list_data = {"list":banned_list, "type" : word_type}
+        banned_words_table.upsert(list_data, Word_type.type == word_type)
+        bot.reply_to(message,bot_answer)
+        logging_procedure(message,bot_answer)
+        return
+        
+    bot_answer = get_localized_string("banned_words", lang, "already_unbanned")
     bot.reply_to(message,bot_answer)
     logging_procedure(message,bot_answer)
 
@@ -886,9 +901,9 @@ def send_in_broadcast(message):
     bot.register_next_step_handler(message,broadcast)
     logging_procedure(message,bot_answer)
 
-#Add banned words event
+#banned words events
 @bot.message_handler(commands=["addbanned"])
-def add_banned_word(message):
+def add_banned(message):
     user = message.from_user
     bot_answer = get_localized_string("banned_words",get_lang(user.id),"add_banned")
 
@@ -899,11 +914,11 @@ def add_banned_word(message):
         return
     
     bot.reply_to(message, bot_answer)
-    bot.register_next_step_handler(message,update_banned_words,"banned")
+    bot.register_next_step_handler(message,add_banned_words,"banned")
     logging_procedure(message,bot_answer)
 
 @bot.message_handler(commands=["addultrabanned"])
-def add_ultra_banned_word(message):
+def add_ultra_banned(message):
     user = message.from_user
     bot_answer = get_localized_string("banned_words",get_lang(user.id),"add_ultrabanned")
 
@@ -914,7 +929,37 @@ def add_ultra_banned_word(message):
         return
     
     bot.reply_to(message, bot_answer)
-    bot.register_next_step_handler(message,update_banned_words,"ultrabanned")
+    bot.register_next_step_handler(message,add_banned_words,"ultrabanned")
+    logging_procedure(message,bot_answer)
+
+@bot.message_handler(commands=["removebanned"])
+def remove_banned(message):
+    user = message.from_user
+    bot_answer = get_localized_string("banned_words",get_lang(user.id),"remove_banned")
+
+    admin_status = get_admin(user.id)
+    permission = get_permission(user.id, "removebanned")
+    if not admin_status or not permission:
+        permission_denied_procedure(message, "admin_only")
+        return
+    
+    bot.reply_to(message, bot_answer)
+    bot.register_next_step_handler(message,remove_banned_words,"banned")
+    logging_procedure(message,bot_answer)
+
+@bot.message_handler(commands=["removeultrabanned"])
+def remove_ultra_banned(message):
+    user = message.from_user
+    bot_answer = get_localized_string("banned_words",get_lang(user.id),"remove_banned")
+
+    admin_status = get_admin(user.id)
+    permission = get_permission(user.id, "removebanned")
+    if not admin_status or not permission:
+        permission_denied_procedure(message, "admin_only")
+        return
+    
+    bot.reply_to(message, bot_answer)
+    bot.register_next_step_handler(message,remove_banned_words,"ultrabanned")
     logging_procedure(message,bot_answer)
 
 #General handlers

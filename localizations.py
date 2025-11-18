@@ -118,15 +118,21 @@ localizations = {
     "banned_words" : {
         "en" : {
             "banned" : "banned.",
-            "already_banned" : "The word was already banned.",
+            "already_banned" : "The word is already banned.",
+            "already_unbanned" : "The word wasn't already banned.",
             "add_banned" : "Which word do you want to ban?",
-            "add_ultrabanned" : "Which word do you want to hyperban?"
+            "remove_banned" : "Which word do you want to unban from this category?",
+            "add_ultrabanned" : "Which word do you want to hyperban?",
+            "unbanned" : "unbanned"
         },
         "it" : {
             "banned" : "bannata.",
             "already_banned" : "Parola già bannata.",
+            "already_unbanned" : "la parola non era bannata.",
             "add_banned" : "Che parola vuoi vietare?",
-            "add_ultrabanned" : "Che parola vuoi iper vietare?"
+            "remove_banned" : "Che parola vuoi sbannare da questa categoria?",
+            "add_ultrabanned" : "Che parola vuoi iper vietare?",
+            "unbanned" : "sbannata"
         },
     },
     "sent" : {
