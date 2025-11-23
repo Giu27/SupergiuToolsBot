@@ -19,8 +19,10 @@ log_path = "logs"
 db = TinyDB("Bot_DB.JSON")
 users_table = db.table("users")
 banned_words_table = db.table("banned_words")
+custom_commands_table = db.table("custom_commands") 
 User = Query()
 Word_type = Query()
+Custom_command = Query()
 
 def store_user_data(user, chat_id : int):
     """Creates and updates the user data in the database"""
@@ -58,9 +60,11 @@ def check_banned_name(name : str) -> bool:
             wordname += car.lower()
 
         if wordname in banned_words: return True
+        elif wordname[::-1] in banned_words: return True
 
         for word in ultra_banned_words:
             if word in wordname: return True
+            elif word[::-1] in wordname: return True
 
 def logging_procedure(message, bot_answer : str):
     """Standard logging, to a file and console, of the user and bot messages not registered by log function"""
@@ -575,6 +579,56 @@ def get_banned_words(word_type) -> list:
     else: banned_list = []
     return banned_list
 
+def add_custom_command_content(message):
+    """Receives the content needed to create the commands"""
+    user = message.from_user
+    bot_answer = get_localized_string("custom_commands",get_lang(user.id),"add_command_content")
+    markup = types.ReplyKeyboardRemove()
+    
+    bot.reply_to(message, bot_answer, reply_markup=markup)
+    bot.register_next_step_handler(message,add_custom_command, message.text)
+    logging_procedure(message,bot_answer)
+
+def add_custom_command(message, name: str):
+    user = message.from_user
+    if message.content_type == "photo": file_id = message.photo[-1].file_id
+    elif message.content_type == "audio": file_id = message.audio.file_id
+    elif message.content_type == "voice": file_id = message.voice.file_id
+    elif message.content_type == "text": file_id = None
+    else: 
+        bot.reply_to(message, get_localized_string("send_to",get_lang(user.id),"unsupported"))
+        return
+
+    command_data = {"content" : {"type" : message.content_type, "text" : message.text, "file_id" : file_id, "caption" : message.caption}, "name" : name.lower()}
+    custom_commands_table.upsert(command_data, Custom_command.name == name.lower())
+
+    bot_answer = f"{name} {get_localized_string("custom_commands", get_lang(user.id), "added")}"
+    bot.reply_to(message,bot_answer)
+    logging_procedure(message,bot_answer)
+
+def remove_custom_command(message):
+    user = message.from_user
+    markup = types.ReplyKeyboardRemove()
+
+    if not(message.text in get_custom_commands_names()):
+        bot_answer = f"{get_localized_string("custom_commands", get_lang(user.id), "not_found")}"
+        bot.reply_to(message,bot_answer, reply_markup=markup)
+        logging_procedure(message,bot_answer)
+        return
+
+    custom_commands_table.remove(Custom_command.name == message.text.lower())
+
+    bot_answer = f"{message.text} {get_localized_string("custom_commands", get_lang(user.id), "removed")}"
+    bot.reply_to(message,bot_answer, reply_markup=markup)
+    logging_procedure(message,bot_answer)
+
+def get_custom_commands_names() -> list[str]:
+    """Returns a list of the dynamically created commands"""
+    commands = []
+    for command in custom_commands_table:
+        commands.append(command["name"])
+    return commands
+
 bot.set_my_commands(commands_en) #default
 bot.set_my_commands(commands_it, language_code="it")
 
@@ -961,6 +1015,81 @@ def remove_ultra_banned(message):
     bot.reply_to(message, bot_answer)
     bot.register_next_step_handler(message,remove_banned_words,"ultrabanned")
     logging_procedure(message,bot_answer)
+
+#custom commands events
+@bot.message_handler(commands=["addcommand"])
+def add_command(message):
+    user = message.from_user
+    bot_answer = get_localized_string("custom_commands",get_lang(user.id),"add_command")
+
+    admin_status = get_admin(user.id)
+    permission = get_permission(user.id, "addcommand")
+    if not admin_status or not permission:
+        permission_denied_procedure(message, "admin_only")
+        return
+    
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True,one_time_keyboard=True,selective=True)
+    for command in get_custom_commands_names():
+        button = types.KeyboardButton(command)
+        markup.add(button)
+    
+    bot.reply_to(message, bot_answer, reply_markup=markup)
+    bot.register_next_step_handler(message,add_custom_command_content)
+    logging_procedure(message,bot_answer)
+
+@bot.message_handler(commands=["removecommand"])
+def remove_command(message):
+    user = message.from_user
+    bot_answer = get_localized_string("custom_commands",get_lang(user.id),"remove_command")
+
+    admin_status = get_admin(user.id)
+    permission = get_permission(user.id, "addcommand")
+    if not admin_status or not permission:
+        permission_denied_procedure(message, "admin_only")
+        return
+    
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True,one_time_keyboard=True,selective=True)
+    for command in get_custom_commands_names():
+        button = types.KeyboardButton(command)
+        markup.add(button)
+    
+    bot.reply_to(message, bot_answer, reply_markup=markup)
+    bot.register_next_step_handler(message,remove_custom_command)
+    logging_procedure(message,bot_answer)
+
+@bot.message_handler(commands=["getcommandslist"])
+def get_command_list(message):
+    user = message.from_user
+    admin_status = get_admin(user.id)
+
+    if not admin_status:
+        permission_denied_procedure(message, "admin_only")
+        return
+
+    bot_answer = get_localized_string("custom_commands",get_lang(user.id),"list")
+    for command in get_custom_commands_names():
+        bot_answer += (f"\n{command}")
+
+    bot.reply_to(message, bot_answer)
+    logging_procedure(message, bot_answer)
+
+@bot.message_handler(func= lambda message: message.text.startswith('/'))
+def handle_custom_commands(message):
+    """Handle dynamically generated commands"""
+    user = message.from_user
+    command = message.text[1:]
+    if command in get_custom_commands_names():
+        permission = get_permission(user.id, command)
+        if not permission:
+            permission_denied_procedure(message, "Blocked")
+            return
+        message_data = custom_commands_table.search(Custom_command.name == command)[0]["content"]
+        if message_data["type"] == "text": bot.send_message(message.chat.id,message_data["text"])
+        elif message_data["type"] == "photo": bot.send_photo(message.chat.id,message_data["file_id"],message_data["caption"])
+        elif message_data["type"] == "audio": bot.send_audio(message.chat.id,message_data["file_id"],message_data["caption"])
+        elif message_data["type"] == "voice": bot.send_voice(message.chat.id,message_data["file_id"],message_data["caption"])
+        else: bot.reply_to(message, get_localized_string("send_to",get_lang(user.id),"unsupported"))
+    log(message)
 
 #General handlers
 @bot.message_handler(content_types=["photo","video","sticker","animation","document","audio","voice"])

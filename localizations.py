@@ -266,5 +266,25 @@ localizations = {
             "admin" : "Account admin:",
             "gender" : "Genere:"
         },
+    },
+    "custom_commands" : {
+        "en" : {
+            "add_command" : "What's the name of the command to creat / update?",
+            "add_command_content" : "Send the message to save!",
+            "added" : "added / updated!",
+            "removed" : "deleted!",
+            "remove_command" : "Which command do you want to delete?",
+            "not_found" : "Command not found!",
+            "list" : "List of custom commands:"
+        },
+        "it" : {
+            "add_command" : "Qual è il nome del comando da creare / aggiornare?",
+            "add_command_content" : "Invia il messaggio da salvare!",
+            "added" : "aggiunto / aggiornato!",
+            "removed" : "rimosso!",
+            "remove_command" : "Quale comando vuoi rimuovere?",
+            "not_found" : "Comando non trovato!",
+            "list" : "Lista dei comandi personalizzati:"
+        }
     }
 }
