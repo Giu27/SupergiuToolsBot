@@ -86,19 +86,21 @@ localizations = {
         "it" : "Bot sviluppato da @Supergiuchannel, il codice è disponibile su Github."
     },
     "choose_target" : {
-        "en" : "Write the user's id:",
-        "it" : "Inserisci l'id dell'utente:"
+        "en" : "Write the user's name:",
+        "it" : "Inserisci il nome dell'utente:"
     },
-    "choose_text" : {
+    "choose_argument" : {
         "en" : {
             "not_found" : "User not found.",
             "selected" : "User selected:",
-            "argument" : "Write the argument:"
+            "argument" : "Write the argument:",
+            "multiple_found" : "Multiple users found! Select the user's id."
         },
         "it" : {
             "not_found" : "Utente non trovato.",
             "selected" : "Utente selezionato:",
-            "argument" : "Inserisci l'argomento:"
+            "argument" : "Inserisci l'argomento:",
+            "multiple_found" : "Sono stati trovati più utenti! Seleziona l'id dell'utente."
         }
     },
     "set_lang" : {
