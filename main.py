@@ -477,6 +477,7 @@ def select_target(message, command : callable, second_arg : bool = True):
                 bot_answer += f"\n{us_id}:\nBotname: {get_viewed_name(us_id)}\n"
             
             bot.reply_to(message, bot_answer, reply_markup=markup)
+            logging_procedure(message, bot_answer)
             bot.register_next_step_handler(message, handle_multiple_users, command, second_arg)
             return
         else:
