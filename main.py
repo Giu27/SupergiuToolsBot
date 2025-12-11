@@ -8,12 +8,16 @@ from localizations import *
 
 load_dotenv()
 
-DEV_MODE = False
+DEV_MODE = False #switches on/off the online/offline notification if testing on a database with multiple users is needed
+LOG = False #switches on/off the logging of messages received by the bot
+
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 OWNER_ID = int(os.environ.get("OWNER_ID"))
 bot = telebot.TeleBot(BOT_TOKEN)
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+os.makedirs("logs", exist_ok=True)
 log_path = "logs"
 
 db = TinyDB("Bot_DB.JSON")
@@ -68,10 +72,11 @@ def check_banned_name(name : str) -> bool:
 
 def logging_procedure(message, bot_answer : str):
     """Standard logging, to a file and console, of the user and bot messages not registered by log function"""
-    log_file = open(f"{log_path}/{message.from_user.id}.txt","a")
-    log(message)
-    logger.info(f"Bot: {bot_answer}")
-    log_file.write(f"Bot: {bot_answer}\n")
+    if LOG:
+        log_file = open(f"{log_path}/{message.from_user.id}.txt","a")
+        log_and_update(message)
+        logger.info(f"Bot: {bot_answer}")
+        log_file.write(f"Bot: {bot_answer}\n")
 
 def get_localized_string(source : str, lang : str, element : str = None):
     """Returns the string from localizations.py in localizations[source][lang] and optionally elements"""
@@ -98,7 +103,7 @@ def send_on_off_notification(status : str):
             try: 
                 if user["chat_id"] and get_notification_status(user["user_id"]):
                     bot.send_message(user["chat_id"], bot_answer)
-                    logger.info(f"Bot: {bot_answer}. chat_id: {user["chat_id"]}")
+                    if LOG: logger.info(f"Bot: {bot_answer}. chat_id: {user["chat_id"]}")
             except (KeyError, telebot.apihelper.ApiTelegramException): pass
 
 def generate_random_name(gender : str) -> str:
@@ -665,13 +670,13 @@ def send_greets(message):
     """Greet the user with its name and a special sentence"""
     user = message.from_user
     lang = get_lang(user.id)
-    store_user_data(user, message.chat.id)
+    store_user_data(user, message.chat.id) #Create or update the user's table when starting
     viewed_name = get_viewed_name(user.id)
 
-    if get_excl_sentence(user.id): special_reply = get_excl_sentence(user.id)
+    if get_excl_sentence(user.id): special_reply = f"\n{get_excl_sentence(user.id)}"
     else: special_reply = ""
     
-    bot_answer = f"{get_localized_string("greet",lang)} {viewed_name}!\n{special_reply}"
+    bot_answer = f"{get_localized_string("greet",lang)} {viewed_name}!{special_reply}"
 
     bot.reply_to(message,bot_answer)
     logging_procedure(message,bot_answer)
@@ -1095,13 +1100,18 @@ def handle_custom_commands(message):
         if not permission:
             permission_denied_procedure(message, "Blocked")
             return
+        
         message_data = custom_commands_table.search(Custom_command.name == command)[0]["content"]
         if message_data["type"] == "text": bot.send_message(message.chat.id,message_data["text"])
         elif message_data["type"] == "photo": bot.send_photo(message.chat.id,message_data["file_id"],message_data["caption"])
         elif message_data["type"] == "audio": bot.send_audio(message.chat.id,message_data["file_id"],message_data["caption"])
         elif message_data["type"] == "voice": bot.send_voice(message.chat.id,message_data["file_id"],message_data["caption"])
         else: bot.reply_to(message, get_localized_string("send_to",get_lang(user.id),"unsupported"))
-    log(message)
+
+        if message_data["type"] == "text": content = message_data["text"]
+        else: content = message_data["type"]
+        logging_procedure(message, content)
+    else: log_and_update(message)
 
 #General handlers
 @bot.message_handler(content_types=["photo","video","sticker","animation","document","audio","voice"])
@@ -1116,17 +1126,21 @@ def handle_media(message):
     logging_procedure(message,bot_answer)
 
 @bot.message_handler(func= lambda commands:True)
-def log(message):
-    """Logs messages that aren't commands and updates the database"""
+def log_and_update(message):
+    """Logs messages and updates the database"""
     user = message.from_user
-    log_file = open(f"{log_path}/{user.id}.txt","a")
     store_user_data(user,message.chat.id)
-    if user.username: user_info = user.username
-    else: user_info = f"{user.first_name} {user.last_name}"
-    if message.content_type == "text": content = message.text
-    else: content = message.content_type
-    logger.info(f"{user.id}, {user_info}: {content}")
-    log_file.write(f"{user.id}, {user_info}: {content}\n")
+
+    if LOG:
+        if user.username: user_info = user.username
+        else: user_info = f"{user.first_name} {user.last_name}"
+
+        if message.content_type == "text": content = message.text
+        else: content = message.content_type
+
+        log_file = open(f"{log_path}/{user.id}.txt","a")
+        logger.info(f"{user.id}, {user_info}: {content}")
+        log_file.write(f"{user.id}, {user_info}: {content}\n")
     
 bot.infinity_polling()
 
