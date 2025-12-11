@@ -138,14 +138,13 @@ def generate_qrcode(message,chat_id):
     bot.reply_to(message, bot_answer)
     logging_procedure(message,bot_answer)
 
-def validate_name(message, name : str, type : str = "name"):
+def validate_name(message, name : str, type : str = "name", max_chars : int = 200):
     """Validates a name (or a sentence), return True if the name is valid"""
-    MAX_CHARS = 200
     user = message.from_user
     lang = get_lang(user.id)
 
-    if len(name) > MAX_CHARS:
-        bot_answer = f"{get_localized_string("set_name",lang,"max_chars")} Max: {MAX_CHARS}"
+    if len(name) > max_chars:
+        bot_answer = f"{get_localized_string("set_name",lang,"max_chars")} Max: {max_chars}"
         bot.reply_to(message,bot_answer)
         logging_procedure(message,bot_answer)
         return False
