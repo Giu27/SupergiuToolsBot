@@ -6,10 +6,44 @@ from datetime import date
 from deep_translator import GoogleTranslator
 from localizations import *
 
+class Bot_DB_Manager:
+    """Class to manage Database creation and read/write operations"""
+    def __init__(self, db_path : str, *tables : str):
+        """Initialize the database with a path, a query and tables"""
+        self.db = TinyDB(db_path)
+        self.query = Query()
+        self.tables = {}
+        for table in tables:
+            self.tables[table] = self.db.table(table)
+    
+    def get_single_doc(self, table : str, condition, attribute: str = None):
+        """Returns the first document found or one of its attributes. Useful when searching by a unique id"""
+        doc = db.tables[table].get(condition)
+        if doc:
+            if attribute: 
+                try: return doc[attribute]
+                except KeyError: return None
+        return doc
+
+    def get_docs(self, table : str, condition):
+        docs = db.tables[table].search(condition)
+        if docs: return docs
+        else: return None
+
+    def upsert_values(self, table : str, data : dict, condition):
+        """Upserts a dict of values"""
+        self.tables[table].upsert(data, condition)
+    
+    def remove_value(self, table : str, condition):
+        self.tables[table].remove(condition)
+    
+    def close(self):
+        self.db.close()
+
 load_dotenv()
 
-DEV_MODE = False #switches on/off the online/offline notification if testing on a database with multiple users is needed
-LOG = False #switches on/off the logging of messages received by the bot
+DEV_MODE = True #switches on/off the online/offline notification if testing on a database with multiple users is needed
+LOG = True #switches on/off the logging of messages received by the bot
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 OWNER_ID = int(os.environ.get("OWNER_ID"))
@@ -20,13 +54,7 @@ logger = logging.getLogger(__name__)
 os.makedirs("logs", exist_ok=True)
 log_path = "logs"
 
-db = TinyDB("Bot_DB.JSON")
-users_table = db.table("users")
-banned_words_table = db.table("banned_words")
-custom_commands_table = db.table("custom_commands") 
-User = Query()
-Word_type = Query()
-Custom_command = Query()
+db = Bot_DB_Manager("Bot_DB.JSON", "users", "banned_words", "custom_commands")
 
 def store_user_data(user, chat_id : int):
     """Creates and updates the user data in the database"""
@@ -45,7 +73,7 @@ def store_user_data(user, chat_id : int):
         "localization" : get_lang(user.id),
         "gender" : get_gender(user.id)
         }
-    users_table.upsert(user_data, User.user_id == user.id)
+    db.upsert_values("users",user_data, db.query.user_id == user.id)
 
 def check_banned_name(name : str) -> bool:
     """Return true if name is banned, false otherwise"""
@@ -98,7 +126,7 @@ def permission_denied_procedure(message, error_msg : str = ""):
 def send_on_off_notification(status : str):
     """Sends a notification whenever the bot turns on or off"""
     if not DEV_MODE:
-        for user in users_table:
+        for user in db.tables["users"]:
             bot_answer = f"{get_localized_string("notifications",get_lang(user["user_id"]),"bot")} {status}!"
             try: 
                 if user["chat_id"] and get_notification_status(user["user_id"]):
@@ -159,16 +187,12 @@ def validate_name(message, name : str, type : str = "name", max_chars : int = 20
 
 def get_botname(us_id : int) -> str | None:
     """Returns the botname of the user identified by us_id"""
-    user_doc = users_table.search(User.user_id == us_id)
-    if user_doc: 
-        botname = user_doc[0]["bot_name"]
-        if botname: 
-            if check_banned_name(botname):
-                botname = None
-                user_data = {"bot_name" : None}
-                users_table.upsert(user_data, User.user_id == us_id)
-        return botname
-    else: return None
+    botname = db.get_single_doc("users", db.query.user_id == us_id, "bot_name")
+    if botname: 
+        if check_banned_name(botname):
+            botname = None
+            db.upsert_values("users", {"bot_name" : botname}, db.query.user_id == us_id)
+    return botname
 
 def set_botname(message, us_id : int, randomName=False):
     """Updates the botname of the user identified by us_id"""
@@ -210,43 +234,32 @@ def reset_botname(message, us_id : int):
 def get_viewed_name(us_id : int) -> str | None:
     """Returns the currently visualized name in the bot"""
     if get_botname(us_id): user_name = get_botname(us_id)
-    else: 
-        user_doc = users_table.search(User.user_id == us_id)
-        if user_doc: user_name = user_doc[0]["first_name"]
-        else: return None
+    else: user_name = db.get_single_doc("users", db.query.user_id == us_id, "first_name")
     return user_name
 
 def get_chat_id(us_id : int) -> int | None:
     """Return the chat id stored in the database"""
-    user_doc = users_table.search(User.user_id == us_id)
-    if user_doc: 
-        ch_id = user_doc[0]["chat_id"]
-        if ch_id: return ch_id
-        else: return None
-    else: return None
+    return db.get_single_doc("users", db.query.user_id == us_id, "chat_id")
 
 def get_permission(us_id : int, command : str = None) -> bool | dict:
     """Returns true if the user can use a command, false if restricted. If no command is specified returns a dict"""
-    user_doc = users_table.search(User.user_id == us_id)
-    if user_doc:
-        if command == None: 
-            try:
-                if user_doc[0]["commands"] != None: return user_doc[0]["commands"]
-                else: return {}
-            except KeyError: return {}
+    commands = db.get_single_doc("users", db.query.user_id == us_id, "commands")
+    if command == None: 
         try:
-            if user_doc[0]["commands"][command] != None: return user_doc[0]["commands"][command]
-            else: raise KeyError
-        except KeyError:
-            data = user_doc[0]["commands"]
-            data[command] = True
-            user_data = {"commands" : data}
-            users_table.upsert(user_data, User.user_id == us_id)
-            return True
-        except TypeError:
-            users_table.upsert({"commands" : {}}, User.user_id == us_id)
-            return get_permission(us_id, command)
-    return None
+            if commands != None: return commands
+            else: return {}
+        except KeyError: return {}
+    try:
+        if commands[command] != None: return commands[command]
+        else: raise KeyError
+    except KeyError:
+        data = commands
+        data[command] = True
+        db.upsert_values("users", {"commands" : data}, db.query.user_id == us_id)
+        return True
+    except TypeError:
+        db.upsert_values("users", {"commands" : {}}, db.query.user_id == us_id)
+        return get_permission(us_id, command)
 
 def set_permission(message, us_id : int):
     """Updates the status of a command for the user identified by us_id"""
@@ -290,11 +303,9 @@ def get_permissions_list(message, us_id : int):
 
 def get_lang(us_id : int) -> str:
     """Returns the user language code, if not found defaults to en"""
-    user_doc = users_table.search(User.user_id == us_id)
-    if user_doc: 
-        try: return user_doc[0]["localization"]
-        except KeyError: return "en"
-    return "en"
+    localization = db.get_single_doc("users", db.query.user_id == us_id, "localization")
+    if localization: return localization
+    else: return "en"
 
 def set_lang(message, us_id : int):
     """Change the bot language, for the user identified by us_id, into italian or english"""
@@ -312,11 +323,9 @@ def set_lang(message, us_id : int):
 
 def get_gender(us_id : int) -> str:
     """Returns the user gender, if not found defaults to m(ale)"""
-    user_doc = users_table.search(User.user_id == us_id)
-    if user_doc: 
-        try: return user_doc[0]["gender"]
-        except KeyError: return 'm'
-    return 'm'
+    gender = db.get_single_doc("users", db.query.user_id == us_id, "gender")
+    if gender: return gender
+    else: return 'm'
 
 def set_gender(message, us_id : int):
     """Change the gender of the name chosen by randomname, for the user identified by us_id, into male or female"""
@@ -336,14 +345,10 @@ def set_gender(message, us_id : int):
 
 def get_admin(us_id : int) -> bool:
     """Return true if the user identified by us_id is admin, false otherwise"""
-    user_doc = users_table.search(User.user_id == us_id)
-    if user_doc: 
-        try:
-            if us_id == OWNER_ID and user_doc[0]["admin_status"] == None: return True
-            if user_doc[0]["admin_status"] == None: return False
-            return user_doc[0]["admin_status"]
-        except KeyError: return False
-    return None
+    admin = db.get_single_doc("users", db.query.user_id == us_id, "admin_status")
+    if us_id == OWNER_ID and admin == None: return True
+    if admin == None: return False
+    return admin
 
 def set_admin(message,us_id : int):
     """Turn the user identified by us_id into an admin or vice versa"""
@@ -361,19 +366,13 @@ def set_admin(message,us_id : int):
 
 def get_notification_status(us_id : int) -> bool:
     """Returns true if the user has on/off notifications active, false otherwise"""
-    user_doc = users_table.search(User.user_id == us_id)
-    if user_doc: 
-        try: return user_doc[0]["notifications"]
-        except KeyError: return True
-    return True
+    notifications = db.get_single_doc("users", db.query.user_id == us_id, "notifications")
+    if notifications == None: return True
+    else: return notifications
 
 def get_excl_sentence(us_id : int) -> str | None:
     """Returns the special sentence of the user us_id"""
-    user_doc = users_table.search(User.user_id == us_id)
-    if user_doc: 
-        try: return user_doc[0]["exclusive_sentence"]
-        except KeyError: return None
-    return None
+    return db.get_single_doc("users", db.query.user_id == us_id, "exclusive_sentence")
 
 def set_excl_sentence(message, us_id : int): 
     """Set a special sentence the user identified by us_id receives when greeted by the bot"""
@@ -449,7 +448,7 @@ def send_message(message, chat_id : int, scope : str = None, acknowledge : bool 
 def broadcast(message, admin_only=False):
     """Send a message to all the users of the bot, or if admin only to just the admins"""
     acknowledge = True
-    for user in users_table:
+    for user in db.tables["users"]:
         try: 
             if user["chat_id"]:
                 if admin_only and user["admin_status"]:
@@ -551,9 +550,8 @@ def choose_argument(message, command : callable, us_id : int, second_arg : bool 
 
 def get_banned_words(word_type) -> list:
     """Return the list of a specified type of banned world"""
-    banned_doc = banned_words_table.search(Word_type.type == word_type)
-    if banned_doc: banned_list = banned_doc[0]["list"]
-    else: banned_list = []
+    banned_list = db.get_single_doc("banned_words", db.query.type == word_type, "list")
+    if banned_list == None: banned_list = []
     return banned_list
 
 def add_banned_words(message, word_type : str):
@@ -601,7 +599,7 @@ def remove_banned_words(message, word_type : str):
 def get_custom_commands_names() -> list[str]:
     """Returns a list of the dynamically created commands"""
     commands = []
-    for command in custom_commands_table:
+    for command in db.tables["custom_commands"]:
         commands.append(command["name"])
     return commands
 
@@ -642,7 +640,7 @@ def remove_custom_command(message):
         logging_procedure(message,bot_answer)
         return
 
-    custom_commands_table.remove(Custom_command.name == message.text.lower())
+    db.remove_value("custom_commands", db.query.name == message.text.lower())
 
     bot_answer = f"{message.text} {get_localized_string("custom_commands", get_lang(user.id), "removed")}"
     bot.reply_to(message,bot_answer, reply_markup=markup)
@@ -814,8 +812,7 @@ def set_notifications(message):
     if get_notification_status(user.id): bot_answer = get_localized_string("notifications",lang,"off")
     else: bot_answer = get_localized_string("notifications",lang,"on")
 
-    user_data = {"notifications" : not get_notification_status(user.id)}
-    users_table.upsert(user_data, User.user_id == user.id)
+    db.upsert_values("users", {"notifications" : not get_notification_status(user.id)}, db.query.user_id == user.id)
     bot.reply_to(message,bot_answer)
 
     logging_procedure(message,bot_answer)
@@ -937,7 +934,7 @@ def get_ids(message):
         permission_denied_procedure(message, "admin_only")
         return
     
-    for user in users_table:
+    for user in db.tables["users"]:
         try: 
             if user["user_id"]: bot_answer += f"{user["user_id"]}: {user["first_name"]} {user["last_name"]}\nBotname: {get_botname(user["user_id"])}\n\n"
         except KeyError: pass
@@ -1100,7 +1097,7 @@ def handle_custom_commands(message):
             permission_denied_procedure(message, "Blocked")
             return
         
-        message_data = custom_commands_table.search(Custom_command.name == command)[0]["content"]
+        message_data = db.get_single_doc("custom_commands", db.query.name == command, "content")
         if message_data["type"] == "text": bot.send_message(message.chat.id,message_data["text"])
         elif message_data["type"] == "photo": bot.send_photo(message.chat.id,message_data["file_id"],message_data["caption"])
         elif message_data["type"] == "audio": bot.send_audio(message.chat.id,message_data["file_id"],message_data["caption"])
