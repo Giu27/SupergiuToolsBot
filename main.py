@@ -25,10 +25,14 @@ class Bot_DB_Manager:
                 except KeyError: return None
         return doc
 
-    def get_docs(self, table : str, condition):
+    def get_docs(self, table : str, condition) -> list:
         "Returns a list of all documents in  table matching a conditions"
         docs = db.tables[table].search(condition)
         return docs
+
+    def contains(self, table : str, condition) -> bool:
+        """Cheks if a table contains the document identified by a condition"""
+        return self.tables[table].contains(condition)
 
     def upsert_values(self, table : str, data : dict, condition):
         """Upserts a dict of values"""
@@ -120,7 +124,7 @@ def permission_denied_procedure(message, error_msg : str = ""):
     """Standard procedure, whenever a user doesn't have the permission to do a certain action"""
     user = message.from_user
     lang = get_lang(user.id)
-    bot_answer = f"{get_localized_string("permission_denied",lang,"default")}\n{get_localized_string("permission_denied",lang,error_msg)}"
+    bot_answer = f"{get_localized_string("permission_denied",lang,"default")}\n{get_localized_string("permission_denied",lang,str(error_msg))}"
     bot.reply_to(message,bot_answer)
     logging_procedure(message,bot_answer)
 
@@ -236,12 +240,13 @@ def get_chat_id(us_id : int) -> int | None:
     """Return the chat id stored in the database"""
     return db.get_single_doc("users", db.query.user_id == us_id, "chat_id")
 
-def get_permission(us_id : int, command : str = None) -> bool | dict:
+def get_permission(us_id : int, command : str = None) -> bool | dict | str:
     """Returns true if the user can use a command, false if restricted. If no command is specified returns a dict"""
+    if not db.contains("users", db.query.user_id == us_id): return "not_found"
     commands = db.get_single_doc("users", db.query.user_id == us_id, "commands")
     if command == None: 
         try:
-            if commands != None: return commands
+            if commands != None and commands != "not_found": return commands
             else: return {}
         except KeyError: return {}
     try:
@@ -661,8 +666,8 @@ def set_user_lang(message):
     user = message.from_user
 
     current_permission = get_permission(user.id, "lang")
-    if not current_permission:
-        permission_denied_procedure(message,"Blocked")
+    if current_permission != True:
+        permission_denied_procedure(message,current_permission)
         return
     
     set_lang(message, user.id)
@@ -674,8 +679,8 @@ def set_name(message):
     bot_answer = get_localized_string("set_name",get_lang(user.id),"prompt")
 
     current_permission = get_permission(user.id, "setname")
-    if not current_permission:
-        permission_denied_procedure(message,"Blocked")
+    if current_permission != True:
+        permission_denied_procedure(message,current_permission)
         return
     
     bot.reply_to(message, bot_answer)
@@ -687,8 +692,8 @@ def reset_name(message):
     """Call function to reset the user's botname."""
     user = message.from_user
     current_permission = get_permission(user.id, "resetname")
-    if not current_permission:
-        permission_denied_procedure(message, "Blocked")
+    if current_permission != True:
+        permission_denied_procedure(message, current_permission)
         return
     
     reset_botname(message,user.id)
@@ -701,8 +706,8 @@ def send_to_owner(message):
     bot_answer = f"{get_localized_string("send_to", get_lang(user.id),"user")} {owner_name}?"
 
     current_permission = get_permission(user.id, "sendtoowner")
-    if not current_permission:
-        permission_denied_procedure(message, "Blocked")
+    if current_permission != True:
+        permission_denied_procedure(message, current_permission)
         return
     
     bot.reply_to(message, bot_answer)
@@ -716,8 +721,8 @@ def send_to_admin(message):
     bot_answer = get_localized_string("send_to", get_lang(user.id),"admins")
 
     current_permission = get_permission(user.id, "sendtoadmin")
-    if not current_permission:
-        permission_denied_procedure(message, "Blocked")
+    if current_permission != True:
+        permission_denied_procedure(message, current_permission)
         return
     
     bot.reply_to(message, bot_answer)
@@ -755,8 +760,8 @@ def set_user_gender(message):
     user = message.from_user
 
     current_permission = get_permission(user.id, "gender")
-    if not current_permission:
-        permission_denied_procedure(message,"Blocked")
+    if current_permission != True:
+        permission_denied_procedure(message,current_permission)
         return
     
     set_gender(message, user.id)
@@ -773,8 +778,8 @@ def random_name(message):
     """Set the user a random name, also doable by using -r as argument for setname"""
     user = message.from_user
     current_permission = get_permission(user.id, "randomname")
-    if not current_permission:
-        permission_denied_procedure(message, "Blocked")
+    if current_permission != True:
+        permission_denied_procedure(message, current_permission)
         return
     
     set_botname(message,user.id,True)
@@ -784,8 +789,8 @@ def request_qrcode(message):
     user = message.from_user
     chat_id = get_chat_id(user.id)
     current_permission = get_permission(user.id, "qrcode")
-    if not current_permission:
-        permission_denied_procedure(message, "Blocked")
+    if current_permission != True:
+        permission_denied_procedure(message, current_permission)
         return
     
     bot_answer = get_localized_string("qrcode",get_lang(user.id),"msg_to_send")
@@ -798,6 +803,10 @@ def set_notifications(message):
     user = message.from_user
     lang = get_lang(user.id)
     
+    if not db.contains("users", db.query.user_id == user.id):
+        permission_denied_procedure(message,"not_found")
+        return
+
     if get_notification_status(user.id): bot_answer = get_localized_string("notifications",lang,"off")
     else: bot_answer = get_localized_string("notifications",lang,"on")
 
@@ -1083,7 +1092,7 @@ def handle_custom_commands(message):
     if command in get_custom_commands_names():
         permission = get_permission(user.id, command)
         if not permission:
-            permission_denied_procedure(message, "Blocked")
+            permission_denied_procedure(message, permission)
             return
         
         message_data = db.get_single_doc("custom_commands", db.query.name == command, "content")
