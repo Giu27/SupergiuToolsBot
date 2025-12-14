@@ -47,14 +47,16 @@ localizations = {
             "target_admin" : "You can't target an admin.",
             "owner_only" : "You must be owner.",
             "admin_only" : "You must be admin with the right permissions.",
-            "Blocked" : "Your use of the command is subject to restrictions."
+            "False" : "Your use of the command is subject to restrictions.",
+            "not_found" : "You weren't in the database, try again."
         },
         "it" : {
             "default" : "Non hai il permesso di usare questo comando!",
             "target_admin" : "Non puoi bloccare un admin.",
             "owner_only" : "Devi essere owner.",
             "admin_only" : "Devi essere admin con i giusti permessi.",
-            "Blocked" : "Il tuo uso del comando è soggetto a restrizioni."
+            "False" : "Il tuo uso del comando è soggetto a restrizioni.",
+            "not_found" : "Non eri nel database, prova di nuovo."
         },
     },
     "notifications" : {
