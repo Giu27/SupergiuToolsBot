@@ -218,15 +218,13 @@ def set_botname(message, us_id : int, randomName=False):
 
 def reset_botname(message, us_id : int):
     """Reset the name of a user identified by us_id"""
-    user_doc = db.get_single_doc("users", db.query.user_id == us_id)
+    target_name = db.get_single_doc("users", db.query.user_id == us_id, "first_name")
     user = message.from_user
     lang = get_lang(user.id)
-    if user_doc:
-        target_name = user_doc["first_name"]
-        db.upsert_values("users", {"bot_name" : None}, db.query.user_id == us_id)
-        bot_answer = f"{get_localized_string("set_name",lang,"name_of")} {target_name} {get_localized_string("set_name",lang,"resetted")}"
 
-    else: bot_answer = get_localized_string("choose_argument",lang,"not_found")
+    db.upsert_values("users", {"bot_name" : None}, db.query.user_id == us_id)
+    bot_answer = f"{get_localized_string("set_name",lang,"name_of")} {target_name} {get_localized_string("set_name",lang,"resetted")}"
+
     bot.reply_to(message,bot_answer)
     logging_procedure(message,bot_answer)
 
@@ -497,9 +495,10 @@ def select_target(message, command : callable, second_arg : bool = True):
             logging_procedure(message, bot_answer)
             bot.register_next_step_handler(message, handle_multiple_users, command, second_arg)
             return
-        else:
+        else: #No users found
             bot_answer = get_localized_string("choose_argument",lang,"not_found")
             bot.reply_to(message, bot_answer, reply_markup=types.ReplyKeyboardRemove())
+            logging_procedure(message, bot_answer)
             return 
         
     choose_argument(message, command, us_id, second_arg)
