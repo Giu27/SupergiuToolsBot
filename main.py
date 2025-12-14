@@ -26,15 +26,16 @@ class Bot_DB_Manager:
         return doc
 
     def get_docs(self, table : str, condition):
+        "Returns a list of all documents in  table matching a conditions"
         docs = db.tables[table].search(condition)
-        if docs: return docs
-        else: return None
+        return docs
 
     def upsert_values(self, table : str, data : dict, condition):
         """Upserts a dict of values"""
         self.tables[table].upsert(data, condition)
     
-    def remove_value(self, table : str, condition):
+    def remove_values(self, table : str, condition):
+        "Removes from a table values matching a condition"
         self.tables[table].remove(condition)
     
     def close(self):
@@ -42,8 +43,8 @@ class Bot_DB_Manager:
 
 load_dotenv()
 
-DEV_MODE = True #switches on/off the online/offline notification if testing on a database with multiple users is needed
-LOG = True #switches on/off the logging of messages received by the bot
+DEV_MODE = False #switches on/off the online/offline notification if testing on a database with multiple users is needed
+LOG = False #switches on/off the logging of messages received by the bot
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 OWNER_ID = int(os.environ.get("OWNER_ID"))
@@ -203,30 +204,24 @@ def set_botname(message, us_id : int, randomName=False):
     
     if not validate_name(message, name): return
     
-    user_doc = users_table.search(User.user_id == us_id)
-    if user_doc:
-        target_viewed_name = get_viewed_name(us_id)
-        user_doc[0]["bot_name"] = name
-        if user.id == us_id: bot_answer = f"{get_localized_string("set_name",lang,"personal_name")} {name}"
-        else:
-            bot_answer = f"{get_localized_string("set_name",lang,"name_of")} {target_viewed_name} {get_localized_string("set_name",lang,"is_now")} {name}"
-            user_data = {"bot_name" : name}
-            users_table.upsert(user_data, User.user_id == us_id)
+    target_viewed_name = get_viewed_name(us_id)
+    if user.id == us_id: bot_answer = f"{get_localized_string("set_name",lang,"personal_name")} {name}"
+    else: bot_answer = f"{get_localized_string("set_name",lang,"name_of")} {target_viewed_name} {get_localized_string("set_name",lang,"is_now")} {name}"
+    db.upsert_values("users", {"bot_name" : name}, db.query.user_id == us_id)
 
-    else: bot_answer = get_localized_string("choose_argument",lang,"not_found")
     bot.reply_to(message,bot_answer)
     logging_procedure(message,bot_answer)
 
 def reset_botname(message, us_id : int):
     """Reset the name of a user identified by us_id"""
-    user_doc = users_table.search(User.user_id == us_id)
+    user_doc = db.get_single_doc("users", db.query.user_id == us_id)
     user = message.from_user
     lang = get_lang(user.id)
     if user_doc:
-        target_name = user_doc[0]["first_name"]
-        user_data = {"bot_name" : None}
-        users_table.upsert(user_data, User.user_id == us_id)
+        target_name = user_doc["first_name"]
+        db.upsert_values("users", {"bot_name" : None}, db.query.user_id == us_id)
         bot_answer = f"{get_localized_string("set_name",lang,"name_of")} {target_name} {get_localized_string("set_name",lang,"resetted")}"
+
     else: bot_answer = get_localized_string("choose_argument",lang,"not_found")
     bot.reply_to(message,bot_answer)
     logging_procedure(message,bot_answer)
@@ -281,8 +276,7 @@ def set_permission(message, us_id : int):
         return
 
     permissions[message.text] = not get_permission(us_id, message.text)
-    user_data = {"commands" : permissions}
-    users_table.upsert(user_data, User.user_id == us_id)
+    db.upsert_values("users", {"commands" : permissions}, db.query.user_id == us_id)
 
     bot.reply_to(message, bot_answer, reply_markup=types.ReplyKeyboardRemove())
     logging_procedure(message,bot_answer)
@@ -316,8 +310,8 @@ def set_lang(message, us_id : int):
     else:
         bot_answer = f"{viewed_name} {get_localized_string("set_lang","it")}"
         lang = "it"
-    user_data = {"localization" : lang}
-    users_table.upsert(user_data, User.user_id == us_id)
+
+    db.upsert_values("users", {"localization" : lang}, db.query.user_id == us_id)
     bot.reply_to(message, bot_answer)
     logging_procedure(message,bot_answer)
 
@@ -338,8 +332,8 @@ def set_gender(message, us_id : int):
     else:
         bot_answer = f"{viewed_name} {get_localized_string("set_gender",lang,'m')}"
         gender = 'm'
-    user_data = {"gender" : gender}
-    users_table.upsert(user_data, User.user_id == us_id)
+ 
+    db.upsert_values("users", {"gender" : gender}, db.query.user_id == us_id)
     bot.reply_to(message, bot_answer)
     logging_procedure(message,bot_answer)
 
@@ -358,8 +352,8 @@ def set_admin(message,us_id : int):
 
     if get_admin(us_id) == True: bot_answer = f"{viewed_name} {get_localized_string("set_admin",lang,"remove")}"
     else: bot_answer = f"{viewed_name} {get_localized_string("set_admin",lang,"add")}"
-    user_data = {"admin_status" : not get_admin(us_id)}
-    users_table.upsert(user_data, User.user_id == us_id)
+     
+    db.upsert_values("users", {"admin_status" : not get_admin(us_id)}, db.query.user_id == us_id)
 
     bot.reply_to(message, bot_answer)
     logging_procedure(message,bot_answer)
@@ -382,29 +376,25 @@ def set_excl_sentence(message, us_id : int):
     
     if not validate_name(message, sentence, "sentence"): return
     
-    user_doc = users_table.search(User.user_id == us_id)
-    if user_doc:
-        target_viewed_name = get_viewed_name(us_id)
-        if sentence.lower() == "none": sentence = None
-        user_doc[0]["exclusive_sentence"] = sentence
-        if user.id == us_id: bot_answer = f"{get_localized_string("set_sentence",lang,"personal_sentence")} {sentence}"
-        else:
-            bot_answer = f"{get_localized_string("set_sentence",lang,"sentence_of")} {target_viewed_name} {get_localized_string("set_name",lang,"is_now")} {sentence}"
-            user_data = {"exclusive_sentence" : sentence}
-            users_table.upsert(user_data, User.user_id == us_id)
-    else: bot_answer = get_localized_string("choose_argument",lang,"not_found")
+    target_viewed_name = get_viewed_name(us_id)
+    if sentence.lower() == "none": sentence = None
+        
+    if user.id == us_id: bot_answer = f"{get_localized_string("set_sentence",lang,"personal_sentence")} {sentence}"
+    else: bot_answer = f"{get_localized_string("set_sentence",lang,"sentence_of")} {target_viewed_name} {get_localized_string("set_name",lang,"is_now")} {sentence}"
+            
+    db.upsert_values("users", {"exclusive_sentence" : sentence}, db.query.user_id == us_id)
 
     bot.reply_to(message,bot_answer)
     logging_procedure(message,bot_answer)
 
 def get_info(message,us_id : int):
     """The bot sends a message with basic user informations"""
-    user_doc = users_table.search(User.user_id == us_id)
+    user_doc = db.get_single_doc("users", db.query.user_id == us_id)
     user = message.from_user
     lang = get_lang(user.id)
 
     if user_doc:
-        bot_answer = f"{get_localized_string("info",lang,"name")} {user_doc[0]["first_name"]}\n{get_localized_string("info",lang,"last_name")} {user_doc[0]["last_name"]}\nUsername: {user_doc[0]["username"]}\n{get_localized_string("info",lang,"user_id")} {user_doc[0]["user_id"]}\n{get_localized_string("info",lang,"bot_name")} {get_botname(us_id)}\n{get_localized_string("info",lang,"sentence")} {get_excl_sentence(us_id)}\n{get_localized_string("info",lang,"language")} {get_lang(us_id)}\n{get_localized_string("info",lang,"gender")} {get_gender(us_id)}\n{get_localized_string("info",lang,"notification")} {get_notification_status(us_id)}\n{get_localized_string("info",lang,"admin")} {get_admin(us_id)}"
+        bot_answer = f"{get_localized_string("info",lang,"name")} {user_doc["first_name"]}\n{get_localized_string("info",lang,"last_name")} {user_doc["last_name"]}\nUsername: {user_doc["username"]}\n{get_localized_string("info",lang,"user_id")} {user_doc["user_id"]}\n{get_localized_string("info",lang,"bot_name")} {get_botname(us_id)}\n{get_localized_string("info",lang,"sentence")} {get_excl_sentence(us_id)}\n{get_localized_string("info",lang,"language")} {get_lang(us_id)}\n{get_localized_string("info",lang,"gender")} {get_gender(us_id)}\n{get_localized_string("info",lang,"notification")} {get_notification_status(us_id)}\n{get_localized_string("info",lang,"admin")} {get_admin(us_id)}"
     else: bot_answer = get_localized_string("choose_argument",lang,"not_found")
 
     bot.reply_to(message, bot_answer)
@@ -470,7 +460,7 @@ def choose_target(message,command : callable, second_arg : bool = True):
         return
     
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True,one_time_keyboard=True,selective=True)
-    for user_data in users_table:
+    for user_data in db.tables["users"]:
         if user_data["username"]: button = types.KeyboardButton(user_data["username"])
         else: button = types.KeyboardButton(user_data["first_name"])
         markup.add(button)
@@ -484,16 +474,15 @@ def select_target(message, command : callable, second_arg : bool = True):
     admin_user = message.from_user
     lang = get_lang(admin_user.id)
 
-    user_doc = users_table.search(User.username == message.text)
-    if user_doc: us_id = user_doc[0]["user_id"]
-    else:
-        user_doc = users_table.search(User.first_name == message.text)
-        if len(user_doc) == 1: us_id = user_doc[0]["user_id"] #One user found, everything is fine
-        elif len(user_doc) > 1: #Multiple users found, specify which one is the correct one!
+    us_id = db.get_single_doc("users", db.query.username == message.text, "user_id")
+    if not us_id:
+        user_docs = db.get_docs("users", db.query.first_name == message.text)
+        if len(user_docs) == 1: us_id = user_docs[0]["user_id"] #One user found, everything is fine
+        elif len(user_docs) > 1: #Multiple users found, specify which one is the correct one!
             bot_answer = f"{get_localized_string("choose_argument",lang,"multiple_found")}"
 
             markup = types.ReplyKeyboardMarkup(resize_keyboard=True,one_time_keyboard=True,selective=True)
-            for user in user_doc:
+            for user in user_docs:
                 us_id = user["user_id"]
                 button = types.KeyboardButton(us_id)
                 markup.add(button)
@@ -514,13 +503,13 @@ def handle_multiple_users(message, command : callable, second_arg : bool = True)
     admin_user = message.from_user
     lang = get_lang(admin_user.id)
 
-    user_doc = users_table.search(User.user_id == int(message.text))
-    if not user_doc:
+    us_id = db.get_single_doc("users", db.query.user_id == int(message.text), "user_id")
+    if not us_id:
         bot_answer = get_localized_string("choose_argument",lang,"not_found")
         bot.reply_to(message, bot_answer, reply_markup=types.ReplyKeyboardRemove())
         return
     
-    choose_argument(message, command, int(message.text), second_arg)
+    choose_argument(message, command, us_id, second_arg)
 
 def choose_argument(message, command : callable, us_id : int, second_arg : bool = True):
     """Second step of the admin framework, right after user selection. it takes in the required text argument of certain commands"""
@@ -538,9 +527,9 @@ def choose_argument(message, command : callable, us_id : int, second_arg : bool 
     
     if command == set_permission:
         markup = types.ReplyKeyboardMarkup(resize_keyboard=True,one_time_keyboard=True,selective=True)
-        user_doc = users_table.search(User.user_id == us_id)
-        if user_doc[0]["commands"]:
-            for command_name in user_doc[0]["commands"]:
+        commands = db.get_single_doc("users", db.query.user_id == us_id, "commands")
+        if commands:
+            for command_name in commands:
                 button = types.KeyboardButton(command_name)
                 markup.add(button)
 
@@ -569,7 +558,7 @@ def add_banned_words(message, word_type : str):
     
     banned_list.append(word)
     list_data = {"list":banned_list, "type" : word_type}
-    banned_words_table.upsert(list_data, Word_type.type == word_type)
+    db.upsert_values("banned_words",list_data, db.query.type == word_type)
 
     bot_answer = f"{word} {get_localized_string("banned_words", lang, "banned")}"
     bot.reply_to(message,bot_answer)
@@ -586,7 +575,7 @@ def remove_banned_words(message, word_type : str):
         banned_list.remove(word)
         bot_answer = f"{word} {get_localized_string("banned_words", lang, "unbanned")}"
         list_data = {"list":banned_list, "type" : word_type}
-        banned_words_table.upsert(list_data, Word_type.type == word_type)
+        db.upsert_values("banned_words",list_data, db.query.type == word_type)
 
         bot.reply_to(message,bot_answer)
         logging_procedure(message,bot_answer)
@@ -624,7 +613,7 @@ def add_custom_command(message, name: str):
         return
 
     command_data = {"content" : {"type" : message.content_type, "text" : message.text, "file_id" : file_id, "caption" : message.caption}, "name" : name.lower()}
-    custom_commands_table.upsert(command_data, Custom_command.name == name.lower())
+    db.upsert_values("custom_commands", command_data, db.query.name == name.lower())
 
     bot_answer = f"{name} {get_localized_string("custom_commands", get_lang(user.id), "added")}"
     bot.reply_to(message,bot_answer)
@@ -640,7 +629,7 @@ def remove_custom_command(message):
         logging_procedure(message,bot_answer)
         return
 
-    db.remove_value("custom_commands", db.query.name == message.text.lower())
+    db.remove_values("custom_commands", db.query.name == message.text.lower())
 
     bot_answer = f"{message.text} {get_localized_string("custom_commands", get_lang(user.id), "removed")}"
     bot.reply_to(message,bot_answer, reply_markup=markup)
@@ -936,11 +925,11 @@ def get_ids(message):
     
     for user in db.tables["users"]:
         try: 
-            if user["user_id"]: bot_answer += f"{user["user_id"]}: {user["first_name"]} {user["last_name"]}\nBotname: {get_botname(user["user_id"])}\n\n"
+            if user["user_id"]: bot_answer += f"\n\n{user["user_id"]}: {user["first_name"]} {user["last_name"]}\nBotname: {get_botname(user["user_id"])}"
         except KeyError: pass
 
     bot.reply_to(message,bot_answer)
-    logging_procedure(message,bot_answer)
+    logging_procedure(message,bot_answer.lstrip())
 
 @bot.message_handler(commands=["sendto"])
 def send_to_target(message):
