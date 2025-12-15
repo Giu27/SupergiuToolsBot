@@ -84,8 +84,8 @@ def check_banned_name(name : str) -> bool:
     """Return true if name is banned, false otherwise"""
     banned_words = get_banned_words("banned")
     ultra_banned_words = get_banned_words("ultrabanned")
-    numToCh = [{'1' : 'i','3' : 'e','4' : 'r', '0' : 'o', '7' : 'l', '5' : 's','$': 'e','€':'e','т' : 't', 'п' : 'n', '\u03c5' : 'u', '\u0435' : 'e', 'ε' : 'e'},
-                {'1' : 'i','3' : 'e','4' : 'a', '0' : 'o', '7' : 'l', '5' : 's','$': 'e','€':'e','т' : 't','п' : 'n', '\u03c5' : 'u', '\u0435' : 'e', 'ε' : 'e'}]
+    numToCh = [{'1' : 'i','3' : 'e','4' : 'r', '0' : 'o', '7' : 'l', '5' : 's','$': 'e','€':'e','т' : 't', 'п' : 'n', '\u03c5' : 'u', '\u0435' : 'e', 'ε' : 'e', '6' : 'g'},
+                {'1' : 'i','3' : 'e','4' : 'a', '0' : 'o', '7' : 'l', '5' : 's','$': 'e','€':'e','т' : 't','п' : 'n', '\u03c5' : 'u', '\u0435' : 'e', 'ε' : 'e', '6' : 'g'}]
     for charset in numToCh:
         wordname = ""
         for char in name:
@@ -452,13 +452,13 @@ def broadcast(message, admin_only=False):
                     acknowledge = False
         except (KeyError, telebot.apihelper.ApiTelegramException): pass
 
-def choose_target(message,command : callable, second_arg : bool = True):
-    """First step of the admin framework, it prompts the admin to get the user who they're targeting with their command. The admin framework let the admins reuse the functions written for normal use in a specific admin mode"""
+def ask_target(message,command : callable, second_arg : bool = True):
+    """First step of the admin framework, it prompts the admin to specify the user who they're targeting with their command. The admin framework let the admins reuse the functions written for normal use in a specific admin mode"""
     user = message.from_user
     bot_answer = get_localized_string("choose_target",get_lang(user.id))
 
-    admin_status = get_admin(user.id)
-    if not admin_status:
+    is_admin = get_admin(user.id)
+    if not is_admin:
         permission_denied_procedure(message,"admin_only")
         return
     
@@ -469,10 +469,10 @@ def choose_target(message,command : callable, second_arg : bool = True):
         markup.add(button)
 
     bot.reply_to(message, bot_answer, reply_markup=markup)
-    bot.register_next_step_handler(message, select_target,command, second_arg)
+    bot.register_next_step_handler(message, validate_target,command, second_arg)
     logging_procedure(message,bot_answer)
 
-def select_target(message, command : callable, second_arg : bool = True):
+def validate_target(message, command : callable, second_arg : bool = True):
     """Checks is the name is unique, it it isn't prompts the admin to specify the id"""
     admin_user = message.from_user
     lang = get_lang(admin_user.id)
@@ -501,7 +501,7 @@ def select_target(message, command : callable, second_arg : bool = True):
             logging_procedure(message, bot_answer)
             return 
         
-    choose_argument(message, command, us_id, second_arg)
+    ask_argument(message, command, us_id, second_arg)
 
 def handle_multiple_users(message, command : callable, second_arg : bool = True):
     admin_user = message.from_user
@@ -513,10 +513,10 @@ def handle_multiple_users(message, command : callable, second_arg : bool = True)
         bot.reply_to(message, bot_answer, reply_markup=types.ReplyKeyboardRemove())
         return
     
-    choose_argument(message, command, us_id, second_arg)
+    ask_argument(message, command, us_id, second_arg)
 
-def choose_argument(message, command : callable, us_id : int, second_arg : bool = True):
-    """Second step of the admin framework, right after user selection. it takes in the required text argument of certain commands"""
+def ask_argument(message, command : callable, us_id : int, second_arg : bool = True):
+    """Second step of the admin framework, right after user selection. it prompts for the required text argument of certain commands"""
     admin_user = message.from_user
     lang = get_lang(admin_user.id)
     markup = types.ReplyKeyboardRemove()
@@ -596,14 +596,14 @@ def get_custom_commands_names() -> list[str]:
         commands.append(command["name"])
     return commands
 
-def add_custom_command_content(message):
-    """Receives the content needed to create the commands"""
+def ask_custom_command_content(message):
+    """Asks the content needed to create the commands"""
     user = message.from_user
     bot_answer = get_localized_string("custom_commands",get_lang(user.id),"add_command_content")
     markup = types.ReplyKeyboardRemove()
     
     bot.reply_to(message, bot_answer, reply_markup=markup)
-    bot.register_next_step_handler(message,add_custom_command, message.text)
+    bot.register_next_step_handler(message, add_custom_command, message.text)
     logging_procedure(message,bot_answer)
 
 def add_custom_command(message, name: str):
@@ -664,9 +664,9 @@ def send_greets(message):
 def set_user_lang(message):
     user = message.from_user
 
-    current_permission = get_permission(user.id, "lang")
-    if current_permission != True:
-        permission_denied_procedure(message,current_permission)
+    has_permission = get_permission(user.id, "lang")
+    if has_permission != True:
+        permission_denied_procedure(message,has_permission)
         return
     
     set_lang(message, user.id)
@@ -677,9 +677,9 @@ def set_name(message):
     user = message.from_user
     bot_answer = get_localized_string("set_name",get_lang(user.id),"prompt")
 
-    current_permission = get_permission(user.id, "setname")
-    if current_permission != True:
-        permission_denied_procedure(message,current_permission)
+    has_permission = get_permission(user.id, "setname")
+    if has_permission != True:
+        permission_denied_procedure(message,has_permission)
         return
     
     bot.reply_to(message, bot_answer)
@@ -690,9 +690,9 @@ def set_name(message):
 def reset_name(message):
     """Call function to reset the user's botname."""
     user = message.from_user
-    current_permission = get_permission(user.id, "resetname")
-    if current_permission != True:
-        permission_denied_procedure(message, current_permission)
+    has_permission = get_permission(user.id, "resetname")
+    if has_permission != True:
+        permission_denied_procedure(message, has_permission)
         return
     
     reset_botname(message,user.id)
@@ -704,9 +704,9 @@ def send_to_owner(message):
     owner_name = get_viewed_name(OWNER_ID)
     bot_answer = f"{get_localized_string("send_to", get_lang(user.id),"user")} {owner_name}?"
 
-    current_permission = get_permission(user.id, "sendtoowner")
-    if current_permission != True:
-        permission_denied_procedure(message, current_permission)
+    has_permission = get_permission(user.id, "sendtoowner")
+    if has_permission != True:
+        permission_denied_procedure(message, has_permission)
         return
     
     bot.reply_to(message, bot_answer)
@@ -719,9 +719,9 @@ def send_to_admin(message):
     user = message.from_user
     bot_answer = get_localized_string("send_to", get_lang(user.id),"admins")
 
-    current_permission = get_permission(user.id, "sendtoadmin")
-    if current_permission != True:
-        permission_denied_procedure(message, current_permission)
+    has_permission = get_permission(user.id, "sendtoadmin")
+    if has_permission != True:
+        permission_denied_procedure(message, has_permission)
         return
     
     bot.reply_to(message, bot_answer)
@@ -758,9 +758,9 @@ def set_user_gender(message):
     """Call function to set the user's gender"""
     user = message.from_user
 
-    current_permission = get_permission(user.id, "gender")
-    if current_permission != True:
-        permission_denied_procedure(message,current_permission)
+    has_permission = get_permission(user.id, "gender")
+    if has_permission != True:
+        permission_denied_procedure(message,has_permission)
         return
     
     set_gender(message, user.id)
@@ -776,9 +776,9 @@ def random_number(message):
 def random_name(message):
     """Set the user a random name, also doable by using -r as argument for setname"""
     user = message.from_user
-    current_permission = get_permission(user.id, "randomname")
-    if current_permission != True:
-        permission_denied_procedure(message, current_permission)
+    has_permission = get_permission(user.id, "randomname")
+    if has_permission != True:
+        permission_denied_procedure(message, has_permission)
         return
     
     set_botname(message,user.id,True)
@@ -787,9 +787,9 @@ def random_name(message):
 def request_qrcode(message):
     user = message.from_user
     chat_id = get_chat_id(user.id)
-    current_permission = get_permission(user.id, "qrcode")
-    if current_permission != True:
-        permission_denied_procedure(message, current_permission)
+    has_permission = get_permission(user.id, "qrcode")
+    if has_permission != True:
+        permission_denied_procedure(message, has_permission)
         return
     
     bot_answer = get_localized_string("qrcode",get_lang(user.id),"msg_to_send")
@@ -839,46 +839,46 @@ def about(message):
 #Admin version of the commands above + extra
 @bot.message_handler(commands=["getpersoninfo"])
 def get_person_info(message):
-    choose_target(message,get_info, False)
+    ask_target(message,get_info, False)
 
 @bot.message_handler(commands=["setpersonname"])
 def set_person_name(message):
     user = message.from_user
-    permission = get_permission(user.id, "setpersonname")
-    if not permission:
+    has_permission = get_permission(user.id, "setpersonname")
+    if not has_permission:
         permission_denied_procedure(message, "admin_only")
         return
     
-    choose_target(message, set_botname)
+    ask_target(message, set_botname)
 
 @bot.message_handler(commands=["resetpersonname"])
 def reset_person_name(message):
     user = message.from_user
-    permission = get_permission(user.id, "resetpersonname")
-    if not permission:
+    has_permission = get_permission(user.id, "resetpersonname")
+    if not has_permission:
         permission_denied_procedure(message, "admin_only")
         return
     
-    choose_target(message, reset_botname, False)
+    ask_target(message, reset_botname, False)
 
 @bot.message_handler(commands=["setpersonpermission"])
 def set_person_permission(message):
     user = message.from_user
-    permission = get_permission(user.id, "setpersonpermission")
-    if not permission:
+    has_permission = get_permission(user.id, "setpersonpermission")
+    if not has_permission:
         permission_denied_procedure(message, "admin_only")
         return
     
-    choose_target(message, set_permission)
+    ask_target(message, set_permission)
 
 @bot.message_handler(commands=["getpersonpermission"])
 def get_person_permissions(message):
     user = message.from_user
-    permission = get_permission(user.id, "getpersonpermission")
-    if not permission:
+    has_permission = get_permission(user.id, "getpersonpermission")
+    if not has_permission:
         permission_denied_procedure(message, "admin_only")
         return
-    choose_target(message, get_permissions_list, False)
+    ask_target(message, get_permissions_list, False)
 
 @bot.message_handler(commands=["setpersonadmin"])
 def set_person_admin(message):
@@ -887,38 +887,38 @@ def set_person_admin(message):
     if user.id != OWNER_ID:
         permission_denied_procedure(message, "owner_only")
         return
-    choose_target(message, set_admin, False)
+    ask_target(message, set_admin, False)
 
 @bot.message_handler(commands=["setpersonsentence"])
 def set_person_sentence(message):
     """Gives a personal sentence easter egg to a user"""
     user = message.from_user
-    permission = get_permission(user.id, "setpersonsentence")
-    if not permission:
+    has_permission = get_permission(user.id, "setpersonsentence")
+    if not has_permission:
         permission_denied_procedure(message, "admin_only")
         return
     
-    choose_target(message, set_excl_sentence)
+    ask_target(message, set_excl_sentence)
 
 @bot.message_handler(commands=["setpersonlang"])
 def set_person_lang(message):
     user = message.from_user
-    permission = get_permission(user.id, "setpersonlang")
-    if not permission:
+    has_permission = get_permission(user.id, "setpersonlang")
+    if not has_permission:
         permission_denied_procedure(message, "admin_only")
         return
     
-    choose_target(message, set_lang, False)
+    ask_target(message, set_lang, False)
 
 @bot.message_handler(commands=["setpersongender"])
 def set_person_gender(message):
     user = message.from_user
-    permission = get_permission(user.id, "setpersongender")
-    if not permission:
+    has_permission = get_permission(user.id, "setpersongender")
+    if not has_permission:
         permission_denied_procedure(message, "admin_only")
         return
     
-    choose_target(message, set_gender, False)
+    ask_target(message, set_gender, False)
 
 @bot.message_handler(commands=["getids"])
 def get_ids(message):
@@ -926,8 +926,8 @@ def get_ids(message):
     user = message.from_user
     bot_answer = ""
 
-    admin_status = get_admin(user.id)
-    if not admin_status:
+    is_admin = get_admin(user.id)
+    if not is_admin:
         permission_denied_procedure(message, "admin_only")
         return
     
@@ -942,12 +942,12 @@ def get_ids(message):
 @bot.message_handler(commands=["sendto"])
 def send_to_target(message):
     user = message.from_user
-    permission = get_permission(user.id, "sendto")
-    if not permission:
+    has_permission = get_permission(user.id, "sendto")
+    if not has_permission:
         permission_denied_procedure(message, "admin_only")
         return
     
-    choose_target(message,send_message)
+    ask_target(message,send_message)
 
 @bot.message_handler(commands=["broadcast"])
 def send_in_broadcast(message):
@@ -955,9 +955,9 @@ def send_in_broadcast(message):
     user = message.from_user
     bot_answer = get_localized_string("broadcast", get_lang(user.id), "msg_to_send")
 
-    admin_status = get_admin(user.id)
-    permission = get_permission(user.id, "broadcast")
-    if not admin_status or not permission:
+    is_admin = get_admin(user.id)
+    has_permission = get_permission(user.id, "broadcast")
+    if not is_admin or not has_permission:
         permission_denied_procedure(message, "admin_only")
         return
     
@@ -971,9 +971,9 @@ def add_banned(message):
     user = message.from_user
     bot_answer = get_localized_string("banned_words",get_lang(user.id),"add_banned")
 
-    admin_status = get_admin(user.id)
-    permission = get_permission(user.id, "addbanned")
-    if not admin_status or not permission:
+    is_admin = get_admin(user.id)
+    has_permission = get_permission(user.id, "addbanned")
+    if not is_admin or not has_permission:
         permission_denied_procedure(message, "admin_only")
         return
     
@@ -986,9 +986,9 @@ def remove_banned(message):
     user = message.from_user
     bot_answer = get_localized_string("banned_words",get_lang(user.id),"remove_banned")
 
-    admin_status = get_admin(user.id)
-    permission = get_permission(user.id, "removebanned")
-    if not admin_status or not permission:
+    is_admin = get_admin(user.id)
+    has_permission = get_permission(user.id, "removebanned")
+    if not is_admin or not has_permission:
         permission_denied_procedure(message, "admin_only")
         return
     
@@ -1001,9 +1001,9 @@ def add_ultra_banned(message):
     user = message.from_user
     bot_answer = get_localized_string("banned_words",get_lang(user.id),"add_ultrabanned")
 
-    admin_status = get_admin(user.id)
-    permission = get_permission(user.id, "addbanned")
-    if not admin_status or not permission:
+    is_admin = get_admin(user.id)
+    has_permission = get_permission(user.id, "addbanned")
+    if not is_admin or not has_permission:
         permission_denied_procedure(message, "admin_only")
         return
     
@@ -1016,9 +1016,9 @@ def remove_ultra_banned(message):
     user = message.from_user
     bot_answer = get_localized_string("banned_words",get_lang(user.id),"remove_banned")
 
-    admin_status = get_admin(user.id)
-    permission = get_permission(user.id, "removebanned")
-    if not admin_status or not permission:
+    is_admin = get_admin(user.id)
+    has_permission = get_permission(user.id, "removebanned")
+    if not is_admin or not has_permission:
         permission_denied_procedure(message, "admin_only")
         return
     
@@ -1030,9 +1030,9 @@ def remove_ultra_banned(message):
 @bot.message_handler(commands=["getcommandslist"])
 def get_command_list(message):
     user = message.from_user
-    admin_status = get_admin(user.id)
+    is_admin = get_admin(user.id)
 
-    if not admin_status:
+    if not is_admin:
         permission_denied_procedure(message, "admin_only")
         return
 
@@ -1048,9 +1048,9 @@ def add_command(message):
     user = message.from_user
     bot_answer = get_localized_string("custom_commands",get_lang(user.id),"add_command")
 
-    admin_status = get_admin(user.id)
-    permission = get_permission(user.id, "addcommand")
-    if not admin_status or not permission:
+    is_admin = get_admin(user.id)
+    has_permission = get_permission(user.id, "addcommand")
+    if not is_admin or not has_permission:
         permission_denied_procedure(message, "admin_only")
         return
     
@@ -1060,7 +1060,7 @@ def add_command(message):
         markup.add(button)
     
     bot.reply_to(message, bot_answer, reply_markup=markup)
-    bot.register_next_step_handler(message,add_custom_command_content)
+    bot.register_next_step_handler(message,ask_custom_command_content)
     logging_procedure(message,bot_answer)
 
 @bot.message_handler(commands=["removecommand"])
@@ -1068,9 +1068,9 @@ def remove_command(message):
     user = message.from_user
     bot_answer = get_localized_string("custom_commands",get_lang(user.id),"remove_command")
 
-    admin_status = get_admin(user.id)
-    permission = get_permission(user.id, "addcommand")
-    if not admin_status or not permission:
+    is_admin = get_admin(user.id)
+    has_permission = get_permission(user.id, "addcommand")
+    if not is_admin or not has_permission:
         permission_denied_procedure(message, "admin_only")
         return
     
@@ -1089,9 +1089,9 @@ def handle_custom_commands(message):
     user = message.from_user
     command = message.text[1:]
     if command in get_custom_commands_names():
-        permission = get_permission(user.id, command)
-        if not permission:
-            permission_denied_procedure(message, permission)
+        has_permission = get_permission(user.id, command)
+        if not has_permission:
+            permission_denied_procedure(message, has_permission)
             return
         
         message_data = db.get_single_doc("custom_commands", db.query.name == command, "content")
