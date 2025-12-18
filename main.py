@@ -47,8 +47,8 @@ class Bot_DB_Manager:
 
 load_dotenv()
 
-DEV_MODE = False #switches on/off the online/offline notification if testing on a database with multiple users is needed
-LOG = False #switches on/off the logging of messages received by the bot
+DEV_MODE = True #switches on/off the online/offline notification if testing on a database with multiple users is needed
+LOG = True #switches on/off the logging of messages received by the bot
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 OWNER_ID = int(os.environ.get("OWNER_ID"))
@@ -414,7 +414,7 @@ def send_message(message, chat_id : int, scope : str = None, acknowledge : bool 
     if scope == 'B': from_text = f"{get_localized_string("broadcast", get_lang(chat_id), "from")} {viewed_name}:"
     if scope == 'A': from_text = f"{get_localized_string("broadcast", get_lang(chat_id), "admin_from")} {viewed_name}:"
 
-    if message.content_type in ("text", "photo", "audio", "voice"):
+    if message.content_type in ("text", "photo", "audio", "voice", "sticker", "document"):
         try:
             bot.send_message(chat_id, from_text)
             if message.content_type == "text":
@@ -430,7 +430,14 @@ def send_message(message, chat_id : int, scope : str = None, acknowledge : bool 
             elif message.content_type == "voice":
                 file_id = message.voice.file_id
                 caption = message.caption if message.caption else None
-                bot.send_voice(chat_id, file_id, caption)          
+                bot.send_voice(chat_id, file_id, caption) 
+            elif message.content_type == "sticker":
+                file_id = message.sticker.file_id
+                bot.send_sticker(chat_id, file_id)
+            elif message.content_type == "document":
+                file_id = message.document.file_id
+                caption = message.caption if message.caption else None
+                bot.send_document(chat_id, file_id, caption=caption)         
         except telebot.apihelper.ApiTelegramException: bot_answer = get_localized_string("send_to", lang, "blocked")
     else: bot_answer = get_localized_string("send_to", lang, "unsupported")
         
@@ -611,6 +618,8 @@ def add_custom_command(message, name: str):
     if message.content_type == "photo": file_id = message.photo[-1].file_id
     elif message.content_type == "audio": file_id = message.audio.file_id
     elif message.content_type == "voice": file_id = message.voice.file_id
+    elif message.content_type == "sticker": file_id = message.sticker.file_id
+    elif message.content_type == "document": file_id = message.document.file_id
     elif message.content_type == "text": file_id = None
     else: 
         bot.reply_to(message, get_localized_string("send_to", get_lang(user.id), "unsupported"))
@@ -1099,6 +1108,8 @@ def handle_custom_commands(message):
         elif message_data["type"] == "photo": bot.send_photo(message.chat.id, message_data["file_id"], message_data["caption"])
         elif message_data["type"] == "audio": bot.send_audio(message.chat.id, message_data["file_id"], message_data["caption"])
         elif message_data["type"] == "voice": bot.send_voice(message.chat.id, message_data["file_id"], message_data["caption"])
+        elif message_data["type"] == "sticker": bot.send_sticker(message.chat.id, message_data["file_id"])
+        elif message_data["type"] == "document": bot.send_document(message.chat.id, message_data["file_id"], caption=message_data["caption"])
         else: bot.reply_to(message, get_localized_string("send_to", get_lang(user.id), "unsupported"))
 
         if message_data["type"] == "text": content = message_data["text"]
