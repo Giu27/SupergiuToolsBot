@@ -111,7 +111,7 @@ def logging_procedure(message, bot_answer : str):
         logger.info(f"Bot: {bot_answer}")
         log_file.write(f"Bot: {bot_answer}\n")
 
-def get_localized_string(source : str, lang : str, element : str = None):
+def get_localized_string(source : str, lang : str, element : str = None) -> str:
     """Returns the string from localizations.py in localizations[source][lang] and optionally elements"""
     try:
         if element: return localizations[source][lang][element]
@@ -171,7 +171,7 @@ def generate_qrcode(message, chat_id : int):
     bot.reply_to(message, bot_answer)
     logging_procedure(message, bot_answer)
 
-def validate_name(message, name : str, type : str = "name", max_chars : int = 200):
+def validate_name(message, name : str, type : str = "name", max_chars : int = 200) -> bool:
     """Validates a name (or a sentence), return True if the name is valid"""
     user = message.from_user
     lang = get_lang(user.id)
@@ -414,7 +414,7 @@ def send_message(message, chat_id : int, scope : str = None, acknowledge : bool 
     if scope == 'B': from_text = f"{get_localized_string("broadcast", get_lang(chat_id), "from")} {viewed_name}:"
     if scope == 'A': from_text = f"{get_localized_string("broadcast", get_lang(chat_id), "admin_from")} {viewed_name}:"
 
-    if message.content_type in ("text", "photo", "audio", "voice"):
+    if message.content_type in ("text", "photo", "audio", "voice", "sticker", "document"):
         try:
             bot.send_message(chat_id, from_text)
             if message.content_type == "text":
@@ -430,7 +430,14 @@ def send_message(message, chat_id : int, scope : str = None, acknowledge : bool 
             elif message.content_type == "voice":
                 file_id = message.voice.file_id
                 caption = message.caption if message.caption else None
-                bot.send_voice(chat_id, file_id, caption)          
+                bot.send_voice(chat_id, file_id, caption) 
+            elif message.content_type == "sticker":
+                file_id = message.sticker.file_id
+                bot.send_sticker(chat_id, file_id)
+            elif message.content_type == "document":
+                file_id = message.document.file_id
+                caption = message.caption if message.caption else None
+                bot.send_document(chat_id, file_id, caption=caption)         
         except telebot.apihelper.ApiTelegramException: bot_answer = get_localized_string("send_to", lang, "blocked")
     else: bot_answer = get_localized_string("send_to", lang, "unsupported")
         
@@ -541,7 +548,7 @@ def ask_argument(message, command : callable, us_id : int, second_arg : bool = T
     bot.register_next_step_handler(message, command, us_id)
     logging_procedure(message, bot_answer)
 
-def get_banned_words(word_type) -> list:
+def get_banned_words(word_type) -> list[str]:
     """Return the list of a specified type of banned world"""
     banned_list = db.get_single_doc("banned_words", db.query.type == word_type, "list")
     if banned_list == None: banned_list = []
@@ -611,6 +618,8 @@ def add_custom_command(message, name: str):
     if message.content_type == "photo": file_id = message.photo[-1].file_id
     elif message.content_type == "audio": file_id = message.audio.file_id
     elif message.content_type == "voice": file_id = message.voice.file_id
+    elif message.content_type == "sticker": file_id = message.sticker.file_id
+    elif message.content_type == "document": file_id = message.document.file_id
     elif message.content_type == "text": file_id = None
     else: 
         bot.reply_to(message, get_localized_string("send_to", get_lang(user.id), "unsupported"))
@@ -1099,6 +1108,8 @@ def handle_custom_commands(message):
         elif message_data["type"] == "photo": bot.send_photo(message.chat.id, message_data["file_id"], message_data["caption"])
         elif message_data["type"] == "audio": bot.send_audio(message.chat.id, message_data["file_id"], message_data["caption"])
         elif message_data["type"] == "voice": bot.send_voice(message.chat.id, message_data["file_id"], message_data["caption"])
+        elif message_data["type"] == "sticker": bot.send_sticker(message.chat.id, message_data["file_id"])
+        elif message_data["type"] == "document": bot.send_document(message.chat.id, message_data["file_id"], caption=message_data["caption"])
         else: bot.reply_to(message, get_localized_string("send_to", get_lang(user.id), "unsupported"))
 
         if message_data["type"] == "text": content = message_data["text"]

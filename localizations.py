@@ -36,7 +36,7 @@ commands_en = [
     types.BotCommand("about", "Return infos about the bot")
 ]
 
-localizations = {
+localizations = { #This dict contains all the texts in the bot in a JSON-like format
     "not_found" : {
         "en" : "Reply not found for the selected language.",
         "it" : "Risposta non trovata per la lingua selezionata."
@@ -273,7 +273,7 @@ localizations = {
     },
     "custom_commands" : {
         "en" : {
-            "add_command" : "What's the name of the command to creat / update?",
+            "add_command" : "What's the name of the command to create / update?",
             "add_command_content" : "Send the message to save!",
             "added" : "added / updated!",
             "removed" : "deleted!",
