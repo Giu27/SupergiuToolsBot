@@ -47,8 +47,8 @@ class Bot_DB_Manager:
 
 load_dotenv()
 
-DEV_MODE = True #switches on/off the online/offline notification if testing on a database with multiple users is needed
-LOG = True #switches on/off the logging of messages received by the bot
+DEV_MODE = False #switches on/off the online/offline notification if testing on a database with multiple users is needed
+LOG = False #switches on/off the logging of messages received by the bot
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 OWNER_ID = int(os.environ.get("OWNER_ID"))
@@ -111,7 +111,7 @@ def logging_procedure(message, bot_answer : str):
         logger.info(f"Bot: {bot_answer}")
         log_file.write(f"Bot: {bot_answer}\n")
 
-def get_localized_string(source : str, lang : str, element : str = None):
+def get_localized_string(source : str, lang : str, element : str = None) -> str:
     """Returns the string from localizations.py in localizations[source][lang] and optionally elements"""
     try:
         if element: return localizations[source][lang][element]
@@ -171,7 +171,7 @@ def generate_qrcode(message, chat_id : int):
     bot.reply_to(message, bot_answer)
     logging_procedure(message, bot_answer)
 
-def validate_name(message, name : str, type : str = "name", max_chars : int = 200):
+def validate_name(message, name : str, type : str = "name", max_chars : int = 200) -> bool:
     """Validates a name (or a sentence), return True if the name is valid"""
     user = message.from_user
     lang = get_lang(user.id)
@@ -548,7 +548,7 @@ def ask_argument(message, command : callable, us_id : int, second_arg : bool = T
     bot.register_next_step_handler(message, command, us_id)
     logging_procedure(message, bot_answer)
 
-def get_banned_words(word_type) -> list:
+def get_banned_words(word_type) -> list[str]:
     """Return the list of a specified type of banned world"""
     banned_list = db.get_single_doc("banned_words", db.query.type == word_type, "list")
     if banned_list == None: banned_list = []
