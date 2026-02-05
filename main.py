@@ -1,5 +1,6 @@
 #Copyright (C) 2025  Giuseppe Caruso
-import telebot, os, logging, qrcode, wikipedia, random, faker, unidecode
+import telebot, os, logging, qrcode, wikipedia, random, faker, unidecode, asyncio
+import telebot.async_telebot as asyncTelebot
 from dotenv import load_dotenv
 from tinydb import TinyDB, Query
 from telebot import types
@@ -49,11 +50,11 @@ class Bot_DB_Manager:
 load_dotenv()
 
 DEV_MODE = False #switches on/off the online/offline notification if testing on a database with multiple users is needed
-LOG = False #switches on/off the logging of messages received by the bot
+LOG = True #switches on/off the logging of messages received by the bot
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 OWNER_ID = int(os.environ.get("OWNER_ID"))
-bot = telebot.TeleBot(BOT_TOKEN)
+bot = asyncTelebot.AsyncTeleBot(BOT_TOKEN)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -105,7 +106,7 @@ def check_banned_name(name : str) -> bool:
             elif word[::-1] in wordname: return True
 
 def logging_procedure(message, bot_answer : str):
-    """Standard logging, to a file and console, of the user and bot messages not registered by log function"""
+    """Standard logging, to a file and console, of the user and bot messages not registered by log function automatically"""
     if LOG:
         log_file = open(f"{log_path}/{message.from_user.id}.txt", "a")
         log_and_update(message)
@@ -121,22 +122,22 @@ def get_localized_string(source : str, lang : str, element : str = None) -> str:
         try: return localizations["not_found"][lang]
         except KeyError: return localizations["not_found"]["en"]
 
-def permission_denied_procedure(message, error_msg : str = ""):
+async def permission_denied_procedure(message, error_msg : str = ""):
     """Standard procedure, whenever a user doesn't have the permission to do a certain action"""
     user = message.from_user
     lang = get_lang(user.id)
     bot_answer = f"{get_localized_string("permission_denied", lang, "default")}\n{get_localized_string("permission_denied", lang, str(error_msg))}"
-    bot.reply_to(message, bot_answer)
+    await bot.reply_to(message, bot_answer)
     logging_procedure(message, bot_answer)
 
-def send_on_off_notification(status : str):
+async def send_on_off_notification(status : str):
     """Sends a notification whenever the bot turns on or off"""
     if not DEV_MODE:
         for user in db.tables["users"]:
             bot_answer = f"{get_localized_string("notifications", get_lang(user["user_id"]), "bot")} {status}!"
             try: 
                 if user["chat_id"] and get_notification_status(user["user_id"]):
-                    bot.send_message(user["chat_id"], bot_answer)
+                    await bot.send_message(user["chat_id"], bot_answer)
                     if LOG: logger.info(f"Bot: {bot_answer}. chat_id: {user["chat_id"]}")
             except (KeyError, telebot.apihelper.ApiTelegramException): pass
 
@@ -200,7 +201,7 @@ def get_botname(us_id : int) -> str | None:
             db.upsert_values("users", {"bot_name" : botname}, db.query.user_id == us_id)
     return botname
 
-def set_botname(message, us_id : int, randomName=False):
+async def set_botname(message, us_id : int, randomName=False):
     """Updates the botname of the user identified by us_id"""
     user = message.from_user
     name = message.text
@@ -214,7 +215,7 @@ def set_botname(message, us_id : int, randomName=False):
     else: bot_answer = f"{get_localized_string("set_name", lang, "name_of")} {target_viewed_name} {get_localized_string("set_name", lang, "is_now")} {name}"
     db.upsert_values("users", {"bot_name" : name}, db.query.user_id == us_id)
 
-    bot.reply_to(message, bot_answer)
+    await bot.reply_to(message, bot_answer)
     logging_procedure(message, bot_answer)
 
 def reset_botname(message, us_id : int):
@@ -305,7 +306,7 @@ def get_lang(us_id : int) -> str:
     if localization: return localization
     else: return "en"
 
-def set_lang(message, us_id : int):
+async def set_lang(message, us_id : int):
     """Change the bot language, for the user identified by us_id, into italian or english"""
     viewed_name = get_viewed_name(us_id)
     if get_lang(us_id) == "it":
@@ -316,7 +317,7 @@ def set_lang(message, us_id : int):
         lang = "it"
 
     db.upsert_values("users", {"localization" : lang}, db.query.user_id == us_id)
-    bot.reply_to(message, bot_answer)
+    await bot.reply_to(message, bot_answer)
     logging_procedure(message, bot_answer)
 
 def get_gender(us_id : int) -> str:
@@ -649,13 +650,8 @@ def remove_custom_command(message):
     bot.reply_to(message, bot_answer, reply_markup=markup)
     logging_procedure(message, bot_answer)
 
-bot.set_my_commands(commands_en) #default
-bot.set_my_commands(commands_it, language_code="it")
-
-send_on_off_notification("online")
-
 @bot.message_handler(commands=["start", "hello"])
-def send_greets(message):
+async def send_greets(message):
     """Greet the user with its name and a special sentence"""
     user = message.from_user
     lang = get_lang(user.id)
@@ -667,11 +663,11 @@ def send_greets(message):
     
     bot_answer = f"{get_localized_string("greet", lang)} {viewed_name}!{special_reply}"
 
-    bot.reply_to(message, bot_answer)
+    await bot.reply_to(message, bot_answer)
     logging_procedure(message, bot_answer)
 
 @bot.message_handler(commands=["lang"])
-def set_user_lang(message):
+async def set_user_lang(message):
     user = message.from_user
 
     has_permission = get_permission(user.id, "lang")
@@ -679,10 +675,10 @@ def set_user_lang(message):
         permission_denied_procedure(message, has_permission)
         return
     
-    set_lang(message, user.id)
+    await set_lang(message, user.id)
 
 @bot.message_handler(commands=["setname"])
-def set_name(message):
+async def set_name(message):
     """Start the event chain to set the user's botname"""
     user = message.from_user
     bot_answer = get_localized_string("set_name", get_lang(user.id), "prompt")
@@ -692,12 +688,12 @@ def set_name(message):
         permission_denied_procedure(message, has_permission)
         return
     
-    bot.reply_to(message, bot_answer)
+    await bot.reply_to(message, bot_answer)
     bot.register_next_step_handler(message, set_botname, user.id)
     logging_procedure(message, bot_answer)
 
 @bot.message_handler(commands=["resetname"])
-def reset_name(message):
+async def reset_name(message):
     """Call function to reset the user's botname."""
     user = message.from_user
     has_permission = get_permission(user.id, "resetname")
@@ -708,7 +704,7 @@ def reset_name(message):
     reset_botname(message, user.id)
 
 @bot.message_handler(commands=["sendtoowner"])
-def send_to_owner(message):
+async def send_to_owner(message):
     """Send a message to the owner of the bot"""
     user = message.from_user
     owner_name = get_viewed_name(OWNER_ID)
@@ -719,7 +715,7 @@ def send_to_owner(message):
         permission_denied_procedure(message, has_permission)
         return
     
-    bot.reply_to(message, bot_answer)
+    await bot.reply_to(message, bot_answer)
     bot.register_next_step_handler(message, send_message, OWNER_ID)
     logging_procedure(message, bot_answer)
 
@@ -1146,9 +1142,19 @@ def log_and_update(message):
         log_file = open(f"{log_path}/{user.id}.txt", "a")
         logger.info(f"{user.id}, {user_info}: {content}")
         log_file.write(f"{user.id}, {user_info}: {content}\n")
-    
-bot.infinity_polling()
 
-send_on_off_notification("offline")
+async def main():
+    await bot.set_my_commands(commands_en) #default
+    await bot.set_my_commands(commands_it, language_code="it")
 
-db.close()
+    await send_on_off_notification("online")
+
+    await bot.polling()
+
+    await send_on_off_notification("offline")
+
+    db.close()
+    await bot.close_session()
+
+if __name__ == "__main__":
+    asyncio.run(main())
