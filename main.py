@@ -218,7 +218,7 @@ async def set_botname(message, us_id : int, randomName=False):
     await bot.reply_to(message, bot_answer)
     logging_procedure(message, bot_answer)
 
-def reset_botname(message, us_id : int):
+async def reset_botname(message, us_id : int):
     """Reset the name of a user identified by us_id"""
     target_name = db.get_single_doc("users", db.query.user_id == us_id, "first_name")
     user = message.from_user
@@ -227,7 +227,7 @@ def reset_botname(message, us_id : int):
     db.upsert_values("users", {"bot_name" : None}, db.query.user_id == us_id)
     bot_answer = f"{get_localized_string("set_name", lang, "name_of")} {target_name} {get_localized_string("set_name", lang, "resetted")}"
 
-    bot.reply_to(message, bot_answer)
+    await bot.reply_to(message, bot_answer)
     logging_procedure(message, bot_answer)
 
 def get_viewed_name(us_id : int) -> str | None:
@@ -326,7 +326,7 @@ def get_gender(us_id : int) -> str:
     if gender: return gender
     else: return 'm'
 
-def set_gender(message, us_id : int):
+async def set_gender(message, us_id : int):
     """Change the gender of the name chosen by randomname, for the user identified by us_id, into male or female"""
     viewed_name = get_viewed_name(us_id)
     user = message.from_user
@@ -339,7 +339,7 @@ def set_gender(message, us_id : int):
         gender = 'm'
  
     db.upsert_values("users", {"gender" : gender}, db.query.user_id == us_id)
-    bot.reply_to(message, bot_answer)
+    await bot.reply_to(message, bot_answer)
     logging_procedure(message, bot_answer)
 
 def get_admin(us_id : int) -> bool:
@@ -392,7 +392,7 @@ def set_excl_sentence(message, us_id : int):
     bot.reply_to(message, bot_answer)
     logging_procedure(message, bot_answer)
 
-def get_info(message, us_id : int):
+async def get_info(message, us_id : int):
     """The bot sends a message with basic user informations"""
     user_doc = db.get_single_doc("users", db.query.user_id == us_id)
     user = message.from_user
@@ -402,7 +402,7 @@ def get_info(message, us_id : int):
         bot_answer = f"{get_localized_string("info", lang, "name")} {user_doc["first_name"]}\n{get_localized_string("info", lang, "last_name")} {user_doc["last_name"]}\nUsername: {user_doc["username"]}\n{get_localized_string("info", lang, "user_id")} {user_doc["user_id"]}\n{get_localized_string("info", lang, "bot_name")} {get_botname(us_id)}\n{get_localized_string("info", lang, "sentence")} {get_excl_sentence(us_id)}\n{get_localized_string("info", lang, "language")} {get_lang(us_id)}\n{get_localized_string("info", lang, "gender")} {get_gender(us_id)}\n{get_localized_string("info", lang, "notification")} {get_notification_status(us_id)}\n{get_localized_string("info", lang, "admin")} {get_admin(us_id)}"
     else: bot_answer = get_localized_string("choose_argument", lang, "not_found")
 
-    bot.reply_to(message, bot_answer)
+    await bot.reply_to(message, bot_answer)
     logging_procedure(message, bot_answer)
 
 def send_message(message, chat_id : int, scope : str = None, acknowledge : bool = True):
@@ -720,7 +720,7 @@ async def send_to_owner(message):
     logging_procedure(message, bot_answer)
 
 @bot.message_handler(commands=["sendtoadmin"])
-def send_to_admin(message):
+async def send_to_admin(message):
     """Send a message to all the admins of the bot"""
     user = message.from_user
     bot_answer = get_localized_string("send_to", get_lang(user.id), "admins")
@@ -730,12 +730,12 @@ def send_to_admin(message):
         permission_denied_procedure(message, has_permission)
         return
     
-    bot.reply_to(message, bot_answer)
+    await bot.reply_to(message, bot_answer)
     bot.register_next_step_handler(message, broadcast, True)
     logging_procedure(message, bot_answer)
 
 @bot.message_handler(commands=["eventstoday"])
-def events_on_wikipedia(message):
+async def events_on_wikipedia(message):
     """send a random event of the day from italian wikipedia"""
     user = message.from_user
     lang = get_lang(user.id)
@@ -756,11 +756,11 @@ def events_on_wikipedia(message):
         bot_answer = f"{event}"
     except wikipedia.exceptions.PageError:
         bot_answer = get_localized_string("wikipedia", lang, "page404")
-    bot.reply_to(message, bot_answer)
+    await bot.reply_to(message, bot_answer)
     logging_procedure(message, bot_answer)
 
 @bot.message_handler(commands=["gender"])
-def set_user_gender(message):
+async def set_user_gender(message):
     """Call function to set the user's gender"""
     user = message.from_user
 
@@ -772,14 +772,14 @@ def set_user_gender(message):
     set_gender(message, user.id)
 
 @bot.message_handler(commands=["randomnumber"])
-def random_number(message):
+async def random_number(message):
     """Return the user a random number"""
     bot_answer = random.randrange(0, 999)
-    bot.reply_to(message, bot_answer)
+    await bot.reply_to(message, bot_answer)
     logging_procedure(message, bot_answer)
 
 @bot.message_handler(commands=["randomname"])
-def random_name(message):
+async def random_name(message):
     """Set the user a random name, also doable by using -r as argument for setname"""
     user = message.from_user
     has_permission = get_permission(user.id, "randomname")
@@ -790,7 +790,7 @@ def random_name(message):
     set_botname(message, user.id, True)
 
 @bot.message_handler(commands=["qrcode"])
-def request_qrcode(message):
+async def request_qrcode(message):
     user = message.from_user
     chat_id = get_chat_id(user.id)
     has_permission = get_permission(user.id, "qrcode")
@@ -799,12 +799,12 @@ def request_qrcode(message):
         return
     
     bot_answer = get_localized_string("qrcode", get_lang(user.id), "msg_to_send")
-    bot.reply_to(message, bot_answer)
+    await bot.reply_to(message, bot_answer)
     bot.register_next_step_handler(message, generate_qrcode, chat_id)
     logging_procedure(message, bot_answer)
 
 @bot.message_handler(commands=["notifications"])
-def set_notifications(message):
+async def set_notifications(message):
     user = message.from_user
     lang = get_lang(user.id)
     
@@ -816,39 +816,39 @@ def set_notifications(message):
     else: bot_answer = get_localized_string("notifications", lang, "on")
 
     db.upsert_values("users", {"notifications" : not get_notification_status(user.id)}, db.query.user_id == user.id)
-    bot.reply_to(message, bot_answer)
+    await bot.reply_to(message, bot_answer)
 
     logging_procedure(message, bot_answer)
 
 @bot.message_handler(commands=["info"])
-def info(message):
+async def info(message):
     user = message.from_user
     get_info(message, user.id)
 
 @bot.message_handler(commands=["permissionlist"])
-def permissions_list(message):
+async def permissions_list(message):
     """Return the user a list with all the commands they can and can't use"""
     user = message.from_user
     get_permissions_list(message, user.id)
 
 @bot.message_handler(commands=["about"])
-def about(message):
+async def about(message):
     """Return a sponsor to myself, really"""
     user = message.from_user
     markup = types.InlineKeyboardMarkup()
     button = types.InlineKeyboardButton("Github", url="github.com/Giu27/SupergiuToolsBot")
     markup.row(button)
     bot_answer = get_localized_string("about", get_lang(user.id))
-    bot.reply_to(message, bot_answer, reply_markup=markup)
+    await bot.reply_to(message, bot_answer, reply_markup=markup)
     logging_procedure(message, bot_answer)
 
 #Admin version of the commands above + extra
 @bot.message_handler(commands=["getpersoninfo"])
-def get_person_info(message):
+async def get_person_info(message):
     ask_target(message, get_info, False)
 
 @bot.message_handler(commands=["setpersonname"])
-def set_person_name(message):
+async def set_person_name(message):
     user = message.from_user
     has_permission = get_permission(user.id, "setpersonname")
     if not has_permission:
@@ -858,7 +858,7 @@ def set_person_name(message):
     ask_target(message, set_botname)
 
 @bot.message_handler(commands=["resetpersonname"])
-def reset_person_name(message):
+async def reset_person_name(message):
     user = message.from_user
     has_permission = get_permission(user.id, "resetpersonname")
     if not has_permission:
@@ -868,7 +868,7 @@ def reset_person_name(message):
     ask_target(message, reset_botname, False)
 
 @bot.message_handler(commands=["setpersonpermission"])
-def set_person_permission(message):
+async def set_person_permission(message):
     user = message.from_user
     has_permission = get_permission(user.id, "setpersonpermission")
     if not has_permission:
@@ -878,7 +878,7 @@ def set_person_permission(message):
     ask_target(message, set_permission)
 
 @bot.message_handler(commands=["getpersonpermission"])
-def get_person_permissions(message):
+async def get_person_permissions(message):
     user = message.from_user
     has_permission = get_permission(user.id, "getpersonpermission")
     if not has_permission:
@@ -887,7 +887,7 @@ def get_person_permissions(message):
     ask_target(message, get_permissions_list, False)
 
 @bot.message_handler(commands=["setpersonadmin"])
-def set_person_admin(message):
+async def set_person_admin(message):
     """Adds an admin to the bot"""
     user = message.from_user
     if user.id != OWNER_ID:
@@ -896,7 +896,7 @@ def set_person_admin(message):
     ask_target(message, set_admin, False)
 
 @bot.message_handler(commands=["setpersonsentence"])
-def set_person_sentence(message):
+async def set_person_sentence(message):
     """Gives a personal sentence easter egg to a user"""
     user = message.from_user
     has_permission = get_permission(user.id, "setpersonsentence")
@@ -907,7 +907,7 @@ def set_person_sentence(message):
     ask_target(message, set_excl_sentence)
 
 @bot.message_handler(commands=["setpersonlang"])
-def set_person_lang(message):
+async def set_person_lang(message):
     user = message.from_user
     has_permission = get_permission(user.id, "setpersonlang")
     if not has_permission:
@@ -917,7 +917,7 @@ def set_person_lang(message):
     ask_target(message, set_lang, False)
 
 @bot.message_handler(commands=["setpersongender"])
-def set_person_gender(message):
+async def set_person_gender(message):
     user = message.from_user
     has_permission = get_permission(user.id, "setpersongender")
     if not has_permission:
@@ -927,7 +927,7 @@ def set_person_gender(message):
     ask_target(message, set_gender, False)
 
 @bot.message_handler(commands=["getids"])
-def get_ids(message):
+async def get_ids(message):
     """Returns a list with all the bot users"""
     user = message.from_user
     bot_answer = ""
@@ -942,11 +942,11 @@ def get_ids(message):
             if user["user_id"]: bot_answer += f"\n\n{user["user_id"]}: {user["first_name"]} {user["last_name"]}\nBotname: {get_botname(user["user_id"])}"
         except KeyError: pass
 
-    bot.reply_to(message, bot_answer)
+    await bot.reply_to(message, bot_answer)
     logging_procedure(message, bot_answer.lstrip())
 
 @bot.message_handler(commands=["sendto"])
-def send_to_target(message):
+async def send_to_target(message):
     user = message.from_user
     has_permission = get_permission(user.id, "sendto")
     if not has_permission:
@@ -956,7 +956,7 @@ def send_to_target(message):
     ask_target(message, send_message)
 
 @bot.message_handler(commands=["broadcast"])
-def send_in_broadcast(message):
+async def send_in_broadcast(message):
     """Event chain to send a message in broadcast"""
     user = message.from_user
     bot_answer = get_localized_string("broadcast", get_lang(user.id), "msg_to_send")
@@ -967,13 +967,13 @@ def send_in_broadcast(message):
         permission_denied_procedure(message, "admin_only")
         return
     
-    bot.reply_to(message, bot_answer)
+    await bot.reply_to(message, bot_answer)
     bot.register_next_step_handler(message, broadcast)
     logging_procedure(message, bot_answer)
 
 #banned words events
 @bot.message_handler(commands=["addbanned"])
-def add_banned(message):
+async def add_banned(message):
     user = message.from_user
     bot_answer = get_localized_string("banned_words", get_lang(user.id), "add_banned")
 
@@ -983,12 +983,12 @@ def add_banned(message):
         permission_denied_procedure(message, "admin_only")
         return
     
-    bot.reply_to(message, bot_answer)
+    await bot.reply_to(message, bot_answer)
     bot.register_next_step_handler(message, add_banned_words, "banned")
     logging_procedure(message, bot_answer)
 
 @bot.message_handler(commands=["removebanned"])
-def remove_banned(message):
+async def remove_banned(message):
     user = message.from_user
     bot_answer = get_localized_string("banned_words", get_lang(user.id), "remove_banned")
 
@@ -998,12 +998,12 @@ def remove_banned(message):
         permission_denied_procedure(message, "admin_only")
         return
     
-    bot.reply_to(message, bot_answer)
+    await bot.reply_to(message, bot_answer)
     bot.register_next_step_handler(message, remove_banned_words, "banned")
     logging_procedure(message, bot_answer)
 
 @bot.message_handler(commands=["addultrabanned"])
-def add_ultra_banned(message):
+async def add_ultra_banned(message):
     user = message.from_user
     bot_answer = get_localized_string("banned_words", get_lang(user.id), "add_ultrabanned")
 
@@ -1013,12 +1013,12 @@ def add_ultra_banned(message):
         permission_denied_procedure(message, "admin_only")
         return
     
-    bot.reply_to(message, bot_answer)
+    await bot.reply_to(message, bot_answer)
     bot.register_next_step_handler(message, add_banned_words, "ultrabanned")
     logging_procedure(message, bot_answer)
 
 @bot.message_handler(commands=["removeultrabanned"])
-def remove_ultra_banned(message):
+async def remove_ultra_banned(message):
     user = message.from_user
     bot_answer = get_localized_string("banned_words", get_lang(user.id), "remove_banned")
 
@@ -1028,13 +1028,13 @@ def remove_ultra_banned(message):
         permission_denied_procedure(message, "admin_only")
         return
     
-    bot.reply_to(message, bot_answer)
+    await bot.reply_to(message, bot_answer)
     bot.register_next_step_handler(message, remove_banned_words, "ultrabanned")
     logging_procedure(message, bot_answer)
 
 #custom commands events
 @bot.message_handler(commands=["getcommandslist"])
-def get_command_list(message):
+async def get_command_list(message):
     user = message.from_user
     is_admin = get_admin(user.id)
 
@@ -1046,11 +1046,11 @@ def get_command_list(message):
     for command in get_custom_commands_names():
         bot_answer += (f"\n{command}")
 
-    bot.reply_to(message, bot_answer)
+    await bot.reply_to(message, bot_answer)
     logging_procedure(message, bot_answer)
 
 @bot.message_handler(commands=["addcommand"])
-def add_command(message):
+async def add_command(message):
     user = message.from_user
     bot_answer = get_localized_string("custom_commands", get_lang(user.id), "add_command")
 
@@ -1065,12 +1065,12 @@ def add_command(message):
         button = types.KeyboardButton(command)
         markup.add(button)
     
-    bot.reply_to(message, bot_answer, reply_markup=markup)
+    await bot.reply_to(message, bot_answer, reply_markup=markup)
     bot.register_next_step_handler(message, ask_custom_command_content)
     logging_procedure(message, bot_answer)
 
 @bot.message_handler(commands=["removecommand"])
-def remove_command(message):
+async def remove_command(message):
     user = message.from_user
     bot_answer = get_localized_string("custom_commands", get_lang(user.id), "remove_command")
 
@@ -1085,12 +1085,12 @@ def remove_command(message):
         button = types.KeyboardButton(command)
         markup.add(button)
     
-    bot.reply_to(message, bot_answer, reply_markup=markup)
+    await bot.reply_to(message, bot_answer, reply_markup=markup)
     bot.register_next_step_handler(message, remove_custom_command)
     logging_procedure(message, bot_answer)
 
 @bot.message_handler(func= lambda message: message.text.startswith('/'))
-def handle_custom_commands(message):
+async def handle_custom_commands(message):
     """Handle dynamically generated commands"""
     user = message.from_user
     command = message.text[1:]
@@ -1107,7 +1107,7 @@ def handle_custom_commands(message):
         elif message_data["type"] == "voice": bot.send_voice(message.chat.id, message_data["file_id"], message_data["caption"])
         elif message_data["type"] == "sticker": bot.send_sticker(message.chat.id, message_data["file_id"])
         elif message_data["type"] == "document": bot.send_document(message.chat.id, message_data["file_id"], caption=message_data["caption"])
-        else: bot.reply_to(message, get_localized_string("send_to", get_lang(user.id), "unsupported"))
+        else: await bot.reply_to(message, get_localized_string("send_to", get_lang(user.id), "unsupported"))
 
         if message_data["type"] == "text": content = message_data["text"]
         else: content = message_data["type"]
@@ -1116,18 +1116,18 @@ def handle_custom_commands(message):
 
 #General handlers
 @bot.message_handler(content_types=["photo", "video", "sticker", "animation", "document", "audio", "voice"])
-def handle_media(message):
+async def handle_media(message):
     user = message.from_user
     lang = get_lang(user.id)
 
     bot_answer = f"{get_localized_string("greet", lang)} {get_viewed_name(user.id)}, {get_localized_string("handle_media", lang, "image")}"
     if (message.voice or message.audio): bot_answer = f"{get_localized_string("greet", lang)} {get_viewed_name(user.id)}, {get_localized_string("handle_media", lang, "audio")}"
 
-    bot.reply_to(message, bot_answer)
+    await bot.reply_to(message, bot_answer)
     logging_procedure(message, bot_answer)
 
 @bot.message_handler(func= lambda commands:True)
-def log_and_update(message):
+async def log_and_update(message):
     """Logs messages and updates the database"""
     user = message.from_user
     store_user_data(user, message.chat.id)
