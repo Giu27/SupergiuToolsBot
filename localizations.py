@@ -1,3 +1,4 @@
+#Copyright (C) 2025  Giuseppe Caruso
 #File containing the various bot localization strings
 from telebot import types
 

@@ -1,3 +1,4 @@
+#Copyright (C) 2025  Giuseppe Caruso
 import telebot, os, logging, qrcode, wikipedia, random, faker, unidecode
 from dotenv import load_dotenv
 from tinydb import TinyDB, Query
