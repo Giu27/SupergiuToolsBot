@@ -1158,7 +1158,7 @@ async def handle_events(message):
     functions = {"validate_target" : validate_target, "set_botname" : set_botname, "send_message" : send_message, "broadcast" : broadcast, "generate_qrcode" : generate_qrcode, "reset_botname" : reset_botname,
                  "ask_custom_command_content" : ask_custom_command_content, "add_custom_command" : add_custom_command, "remove_custom_command" : remove_custom_command, "set_excl_sentence" : set_excl_sentence,
                  "set_permission" : set_permission, "set_lang" : set_lang, "set_gender" : set_gender, "get_info" : get_info, "get_permissions_list" : get_permissions_list, "set_admin" : set_admin,
-                 "add_banned_words" : add_banned_words, "remove_banned_words" : remove_banned_words}
+                 "add_banned_words" : add_banned_words, "remove_banned_words" : remove_banned_words, "handle_multiple_users" : handle_multiple_users}
     event = await get_event(user.id)
 
     if event:
