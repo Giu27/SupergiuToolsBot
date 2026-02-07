@@ -10,7 +10,7 @@ commands_it = [
     types.BotCommand("sendtoowner", "Invia un messaggio all'owner"),
     types.BotCommand("sendtoadmin", "Invia un messaggio a tutti gli admin"),
     types.BotCommand("eventstoday", "Restituisce curiosità storiche sulla data di oggi"),
-    types.BotCommand("gender", "Permette all'utente di cambiare il genere utilizzato da randomname"),
+    types.BotCommand("gender", "Permette all'utente di cambiare il genere utilizzato da randomname (m -> f -> nb -> m)"),
     types.BotCommand("randomnumber", "Restituisce un numero casuale tra 0 e 999"),
     types.BotCommand("randomname", "Imposta un nome casuale"),
     types.BotCommand("qrcode", "Crea un QR Code di un contenuto testuale inviato"),
@@ -28,7 +28,7 @@ commands_en = [
     types.BotCommand("sendtoowner", "Send a message to the bot's owner"),
     types.BotCommand("sendtoadmin", "Send a message to the bot's admins"),
     types.BotCommand("eventstoday", "Return a fun fact about this day in history"),
-    types.BotCommand("gender", "Let user change the gender used by randomname"),
+    types.BotCommand("gender", "Let user change the gender used by randomname (m -> f -> nb -> m)"),
     types.BotCommand("randomnumber", "Return a random number in the 0 to 999 range"),
     types.BotCommand("randomname", "Set a random name"),
     types.BotCommand("qrcode", "Let the user creates a QR Code from text"),
@@ -244,10 +244,12 @@ localizations = { #This dict contains all the texts in the bot in a JSON-like fo
         "en" : {
             "m" : "will now be considered male.",
             "f" : "will now be considered female.",
+            "nb": "will now be considered other/non-binary"
         },
         "it" : {
             "m" : "sarà ora considerato maschio.",
             "f" : "sarà ora considerata femmina.",
+            "nb": "sarà ora considerato altro/non-binario"
         },
     },
     "info" : {

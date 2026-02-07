@@ -50,7 +50,7 @@ class Bot_DB_Manager:
 load_dotenv()
 
 DEV_MODE = False #switches on/off the online/offline notification if testing on a database with multiple users is needed
-LOG = True #switches on/off the logging of messages received by the bot
+LOG = False #switches on/off the logging of messages received by the bot
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 OWNER_ID = int(os.environ.get("OWNER_ID"))
@@ -150,10 +150,12 @@ def generate_random_name(gender : str) -> str:
 
     if lang == "ja_JP":
         if gender == 'f': name = fake.first_romanized_name_female()
-        else: name = fake.first_romanized_name_male()
+        elif gender == 'm': name = fake.first_romanized_name_male()
+        else: name = random.choice([fake.first_romanized_name_male(), fake.first_romanized_name_female()])
     else:
         if gender == 'f': name = fake.first_name_female()
-        else: name = fake.first_name_male()
+        elif gender == 'm': name = fake.first_name_male()
+        else: name = fake.first_name_nonbinary()
         name = unidecode.unidecode(name)
     return name
 
@@ -328,13 +330,16 @@ async def get_gender(us_id : int) -> str:
     else: return 'm'
 
 async def set_gender(message, us_id : int):
-    """Change the gender of the name chosen by randomname, for the user identified by us_id, into male or female"""
+    """Change the gender of the name chosen by randomname, for the user identified by us_id"""
     viewed_name = await get_viewed_name(us_id)
     user = message.from_user
     lang = await get_lang(user.id)
     if await get_gender(us_id) == 'm':
         bot_answer = f"{viewed_name} {get_localized_string("set_gender", lang, 'f')}"
         gender = 'f'
+    elif await get_gender(us_id) == 'f':
+        bot_answer = f"{viewed_name} {get_localized_string("set_gender", lang, 'nb')}"
+        gender = 'nb'
     else:
         bot_answer = f"{viewed_name} {get_localized_string("set_gender", lang, 'm')}"
         gender = 'm'
