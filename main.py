@@ -1,5 +1,5 @@
 #Copyright (C) 2025  Giuseppe Caruso
-import telebot, os, logging, qrcode, wikipedia, random, faker, unidecode, asyncio
+import telebot, os, logging, qrcode, wikipedia, random, faker, unidecode, asyncio, aiofiles
 import telebot.async_telebot as asyncTelebot
 from dotenv import load_dotenv
 from asynctinydb import TinyDB, Query
@@ -109,10 +109,10 @@ async def check_banned_name(name : str) -> bool:
 async def logging_procedure(message, bot_answer : str):
     """Standard logging, to a file and console, of the user and bot messages not registered by log function automatically"""
     if LOG:
-        log_file = open(f"{log_path}/{message.from_user.id}.txt", "a")
         await log_and_update(message)
         logger.info(f"Bot: {bot_answer}")
-        log_file.write(f"Bot: {bot_answer}\n")
+        async with aiofiles.open(f"{log_path}/{message.from_user.id}.txt", "a") as log_file:
+            await log_file.write(f"Bot: {bot_answer}\n")
 
 def get_localized_string(source : str, lang : str, element : str = None) -> str:
     """Returns the string from localizations.py in localizations[source][lang] and optionally elements"""
@@ -664,6 +664,26 @@ async def remove_custom_command(message):
     await bot.reply_to(message, bot_answer, reply_markup=markup)
     await logging_procedure(message, bot_answer)
 
+def generate_wikipedia_event(lang):
+    wikipedia.set_lang("it")
+    engToIta = {"January": "gennaio", "February" : "febbraio", "March" : "marzo", "April" : "aprile", "May" : "maggio", "June" : "giugno",
+                "July" : "luglio", "August" : "agosto", "September" : "settembre", "October" : "ottobre" , "November" : "novembre", "December" : "dicembre"}
+    month = engToIta[date.today().strftime("%B")] 
+    page_title = f"{date.today().day}_{month}"
+    section_name = "Eventi"
+    try:
+        page = wikipedia.page(page_title)
+        content = page.section(section_name)
+        events_list = [line for line in content.split("\n")]
+        event = random.choice(events_list)
+        if lang != "it":
+            translator = GoogleTranslator("it", lang)
+            event = translator.translate(event)
+        bot_answer = f"{event}"
+    except wikipedia.exceptions.PageError:
+        bot_answer = get_localized_string("wikipedia", lang, "page404")
+    return bot_answer
+
 @bot.message_handler(commands=["start", "hello"])
 async def send_greets(message):
     """Greet the user with its name and a special sentence"""
@@ -753,23 +773,8 @@ async def events_on_wikipedia(message):
     """send a random event of the day from italian wikipedia"""
     user = message.from_user
     lang = await get_lang(user.id)
-    wikipedia.set_lang("it")
-    engToIta = {"January": "gennaio", "February" : "febbraio", "March" : "marzo", "April" : "aprile", "May" : "maggio", "June" : "giugno",
-                "July" : "luglio", "August" : "agosto", "September" : "settembre", "October" : "ottobre" , "November" : "novembre", "December" : "dicembre"}
-    month = engToIta[date.today().strftime("%B")] 
-    page_title = f"{date.today().day}_{month}"
-    section_name = "Eventi"
-    try:
-        page = wikipedia.page(page_title)
-        content = page.section(section_name)
-        events_list = [line for line in content.split("\n")]
-        event = random.choice(events_list)
-        if lang != "it":
-            translator = GoogleTranslator("it", lang)
-            event = translator.translate(event)
-        bot_answer = f"{event}"
-    except wikipedia.exceptions.PageError:
-        bot_answer = get_localized_string("wikipedia", lang, "page404")
+    loop = asyncio.get_running_loop()
+    bot_answer = await loop.run_in_executor(None, generate_wikipedia_event, lang)
     await bot.reply_to(message, bot_answer)
     await logging_procedure(message, bot_answer)
 
@@ -1185,9 +1190,9 @@ async def log_and_update(message):
         if message.content_type == "text": content = message.text
         else: content = message.content_type
 
-        log_file = open(f"{log_path}/{user.id}.txt", "a")
         logger.info(f"{user.id}, {user_info}: {content}")
-        log_file.write(f"{user.id}, {user_info}: {content}\n")
+        async with aiofiles.open(f"{log_path}/{user.id}.txt", "a") as log_file:
+            await log_file.write(f"{user.id}, {user_info}: {content}\n")
 
 async def main():
     await bot.set_my_commands(commands_en) #default
