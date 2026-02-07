@@ -1,4 +1,5 @@
 __pycache__/
 .env
 Bot_DB.JSON
+Bot_DB1.JSON
 logs
