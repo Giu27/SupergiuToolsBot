@@ -420,7 +420,7 @@ async def set_event(message, next_step : callable , content = None, command : ca
 
     next_step = next_step.__name__ if not isinstance(next_step, str) else next_step
     if command:
-        if not isinstance(next_step, str): command_name = command.__name__
+        if not isinstance(command, str): command_name = command.__name__
         else: command_name = command
     else: command_name = None
     
