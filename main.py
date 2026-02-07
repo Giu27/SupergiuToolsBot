@@ -419,7 +419,10 @@ async def set_event(message, next_step : callable , content = None, command : ca
     user = message.from_user
 
     next_step = next_step.__name__ if not isinstance(next_step, str) else next_step
-    command_name = command.__name__ if command else None
+    if command:
+        if not isinstance(next_step, str): command_name = command.__name__
+        else: command_name = command
+    else: command_name = None
     
     await db.upsert_values("users", {"event" : {"next" : next_step, "content" : content, "command" : command_name, "second_arg" : second_arg}}, db.query.user_id == user.id)
 
@@ -516,7 +519,7 @@ async def validate_target(message, command : callable, second_arg : bool = True)
                 us_id = user["user_id"]
                 button = types.KeyboardButton(us_id)
                 markup.add(button)
-                bot_answer += f"\n{us_id}:\nBotname: {get_viewed_name(us_id)}\n"
+                bot_answer += f"\n{us_id}:\nBotname: {await get_viewed_name(us_id)}\n"
             
             await bot.reply_to(message, bot_answer, reply_markup=markup)
             await logging_procedure(message, bot_answer)
