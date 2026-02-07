@@ -420,7 +420,8 @@ async def set_event(message, next_step : callable , content = None, command : ca
 
     next_step = next_step.__name__ if not isinstance(next_step, str) else next_step
     if command:
-        if not isinstance(next_step, str): command = command.__name__
+        if not isinstance(next_step, str): command_name = command.__name__
+        else: command_name = command
     else: command_name = None
     
     await db.upsert_values("users", {"event" : {"next" : next_step, "content" : content, "command" : command_name, "second_arg" : second_arg}}, db.query.user_id == user.id)
