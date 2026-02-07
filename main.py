@@ -78,7 +78,8 @@ async def store_user_data(user, chat_id : int):
         "exclusive_sentence" : await get_excl_sentence(user.id),
         "notifications" : await get_notification_status(user.id),
         "localization" : await get_lang(user.id),
-        "gender" : await get_gender(user.id)
+        "gender" : await get_gender(user.id),
+        "event" : await get_event(user.id)
         }
     await db.upsert_values("users", user_data, db.query.user_id == user.id)
 
@@ -167,9 +168,9 @@ async def generate_qrcode(message, chat_id : int):
     img.save(img_path)
     try:
         with open(img_path, "rb") as code:
-            bot.send_photo(chat_id, code)
+            await bot.send_photo(chat_id, code)
         os.remove(img_path)
-    except Exception as e: bot_answer = f"{get_localized_string("qrcode", lang, "error")} {get_viewed_name(OWNER_ID)}: \n{e}"
+    except Exception as e: bot_answer = f"{get_localized_string("qrcode", lang, "error")} {await get_viewed_name(OWNER_ID)}: \n{e}"
     await bot.reply_to(message, bot_answer)
     await logging_procedure(message, bot_answer)
 
@@ -264,7 +265,7 @@ async def get_permission(us_id : int, command : str = None) -> bool | dict | str
 async def set_permission(message, us_id : int):
     """Updates the status of a command for the user identified by us_id"""
     user = message.from_user
-    if get_admin(us_id) and us_id != user.id and user.id != OWNER_ID:
+    if await get_admin(us_id) and us_id != user.id and user.id != OWNER_ID:
         await permission_denied_procedure(message, "target_admin")
         return
     
@@ -405,6 +406,18 @@ async def get_info(message, us_id : int):
     await bot.reply_to(message, bot_answer)
     await logging_procedure(message, bot_answer)
 
+async def get_event(us_id : int):
+    """Return the current pending event to handle for that user"""
+    return await db.get_single_doc("users", db.query.user_id == us_id, "event")
+
+async def set_event(message, next_step : callable , content = None, command : callable = None, second_arg : bool = None):
+    user = message.from_user
+
+    next_step = next_step.__name__ if not isinstance(next_step, str) else next_step
+    command_name = command.__name__ if command else None
+    
+    await db.upsert_values("users", {"event" : {"next" : next_step, "content" : content, "command" : command_name, "second_arg" : second_arg}}, db.query.user_id == user.id)
+
 async def send_message(message, chat_id : int, scope : str = None, acknowledge : bool = True):
     """Send a message to the chat identified by chat_id"""
     user = message.from_user
@@ -450,7 +463,7 @@ async def send_message(message, chat_id : int, scope : str = None, acknowledge :
 async def broadcast(message, admin_only=False):
     """Send a message to all the users of the bot, or if admin only to just the admins"""
     acknowledge = True
-    for user in db.tables["users"]:
+    async for user in db.tables["users"]:
         try: 
             if user["chat_id"]:
                 if admin_only and user["admin_status"]:
@@ -472,19 +485,19 @@ async def ask_target(message, command : callable, second_arg : bool = True):
         return
     
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True, selective=True)
-    for user_data in db.tables["users"]:
+    async for user_data in db.tables["users"]:
         if user_data["username"]: button = types.KeyboardButton(user_data["username"])
         else: button = types.KeyboardButton(user_data["first_name"])
         markup.add(button)
 
     await bot.reply_to(message, bot_answer, reply_markup=markup)
-    bot.register_next_step_handler(message, validate_target, command, second_arg)
+    await set_event(message, validate_target, command=command, second_arg=second_arg)
     await logging_procedure(message, bot_answer)
 
 async def validate_target(message, command : callable, second_arg : bool = True):
     """Checks is the name is unique, it it isn't prompts the admin to specify the id"""
     admin_user = message.from_user
-    lang = get_lang(admin_user.id)
+    lang = await get_lang(admin_user.id)
 
     us_id = await db.get_single_doc("users", db.query.username == message.text, "user_id")
     if not us_id:
@@ -502,7 +515,7 @@ async def validate_target(message, command : callable, second_arg : bool = True)
             
             await bot.reply_to(message, bot_answer, reply_markup=markup)
             await logging_procedure(message, bot_answer)
-            bot.register_next_step_handler(message, handle_multiple_users, command, second_arg)
+            await set_event(message, handle_multiple_users, command=command, second_arg=second_arg)
             return
         else: #No users found
             bot_answer = get_localized_string("choose_argument", lang, "not_found")
@@ -530,15 +543,16 @@ async def ask_argument(message, command : callable, us_id : int, second_arg : bo
     lang = await get_lang(admin_user.id)
     markup = types.ReplyKeyboardRemove()
 
-    bot_answer = f"{get_localized_string("choose_argument", lang, "selected")} {get_viewed_name(us_id)} ({us_id}). \n{get_localized_string("choose_argument", lang, "argument")}"
+    bot_answer = f"{get_localized_string("choose_argument", lang, "selected")} {await get_viewed_name(us_id)} ({us_id}). \n{get_localized_string("choose_argument", lang, "argument")}"
 
     if not second_arg:
-        bot_answer = f"{get_localized_string("choose_argument", lang, "selected")} {get_viewed_name(us_id)} ({us_id})."
+        bot_answer = f"{get_localized_string("choose_argument", lang, "selected")} {await get_viewed_name(us_id)} ({us_id})."
         await bot.reply_to(message, bot_answer, reply_markup=types.ReplyKeyboardRemove())
-        command(message, us_id)
+        await set_event(message, command, us_id)
+        await handle_events(message)
         return
     
-    if command == set_permission:
+    if command == set_permission.__name__:
         markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True, selective=True)
         commands = await db.get_single_doc("users", db.query.user_id == us_id, "commands")
         if commands:
@@ -547,7 +561,7 @@ async def ask_argument(message, command : callable, us_id : int, second_arg : bo
                 markup.add(button)
 
     await bot.reply_to(message, bot_answer, reply_markup=markup)
-    bot.register_next_step_handler(message, command, us_id)
+    await set_event(message, command, content=us_id)
     await logging_procedure(message, bot_answer)
 
 async def get_banned_words(word_type) -> list[str]:
@@ -598,10 +612,10 @@ async def remove_banned_words(message, word_type : str):
     await bot.reply_to(message, bot_answer)
     await logging_procedure(message, bot_answer)
 
-def get_custom_commands_names() -> list[str]:
+async def get_custom_commands_names() -> list[str]:
     """Returns a list of the dynamically created commands"""
     commands = []
-    for command in db.tables["custom_commands"]:
+    async for command in db.tables["custom_commands"]:
         commands.append(command["name"])
     return commands
 
@@ -612,7 +626,7 @@ async def ask_custom_command_content(message):
     markup = types.ReplyKeyboardRemove()
     
     await bot.reply_to(message, bot_answer, reply_markup=markup)
-    await bot.register_next_step_handler(message, add_custom_command, message.text)
+    await set_event(message, add_custom_command, content=message.text)
     await logging_procedure(message, bot_answer)
 
 async def add_custom_command(message, name: str):
@@ -638,7 +652,7 @@ async def remove_custom_command(message):
     user = message.from_user
     markup = types.ReplyKeyboardRemove()
 
-    if not(message.text in get_custom_commands_names()):
+    if not(message.text in await get_custom_commands_names()):
         bot_answer = f"{get_localized_string("custom_commands", await get_lang(user.id), "not_found")}"
         await bot.reply_to(message, bot_answer, reply_markup=markup)
         await logging_procedure(message, bot_answer)
@@ -689,7 +703,7 @@ async def set_name(message):
         return
     
     await bot.reply_to(message, bot_answer)
-    bot.register_next_step_handler(message, set_botname, user.id)
+    await set_event(message, set_botname, content=user.id)
     await logging_procedure(message, bot_answer)
 
 @bot.message_handler(commands=["resetname"])
@@ -716,7 +730,7 @@ async def send_to_owner(message):
         return
     
     await bot.reply_to(message, bot_answer)
-    bot.register_next_step_handler(message, send_message, OWNER_ID)
+    await set_event(message, send_message, content=OWNER_ID)
     await logging_procedure(message, bot_answer)
 
 @bot.message_handler(commands=["sendtoadmin"])
@@ -731,7 +745,7 @@ async def send_to_admin(message):
         return
     
     await bot.reply_to(message, bot_answer)
-    bot.register_next_step_handler(message, broadcast, True)
+    await set_event(message, broadcast, content=True)
     await logging_procedure(message, bot_answer)
 
 @bot.message_handler(commands=["eventstoday"])
@@ -800,7 +814,7 @@ async def request_qrcode(message):
     
     bot_answer = get_localized_string("qrcode", await get_lang(user.id), "msg_to_send")
     await bot.reply_to(message, bot_answer)
-    bot.register_next_step_handler(message, await generate_qrcode, chat_id)
+    await set_event(message, generate_qrcode, content=chat_id)
     await logging_procedure(message, bot_answer)
 
 @bot.message_handler(commands=["notifications"])
@@ -815,7 +829,7 @@ async def set_notifications(message):
     if await get_notification_status(user.id): bot_answer = get_localized_string("notifications", lang, "off")
     else: bot_answer = get_localized_string("notifications", lang, "on")
 
-    await db.upsert_values("users", {"notifications" : not get_notification_status(user.id)}, db.query.user_id == user.id)
+    await db.upsert_values("users", {"notifications" : not await get_notification_status(user.id)}, db.query.user_id == user.id)
     await bot.reply_to(message, bot_answer)
 
     await logging_procedure(message, bot_answer)
@@ -830,6 +844,17 @@ async def permissions_list(message):
     """Return the user a list with all the commands they can and can't use"""
     user = message.from_user
     await get_permissions_list(message, user.id)
+
+@bot.message_handler(commands=["cancel"])
+async def cancel_command(message, reply=True):
+    user = message.from_user
+    markup = types.ReplyKeyboardRemove()
+    await db.upsert_values("users", {"event" : None}, db.query.user_id == user.id)
+
+    if reply:
+        bot_answer = get_localized_string("cancel", await get_lang(user.id))
+        await bot.reply_to(message, bot_answer, reply_markup=markup)
+        await logging_procedure(message, bot_answer)
 
 @bot.message_handler(commands=["about"])
 async def about(message):
@@ -860,7 +885,7 @@ async def set_person_name(message):
 @bot.message_handler(commands=["resetpersonname"])
 async def reset_person_name(message):
     user = message.from_user
-    has_permission = get_permission(user.id, "resetpersonname")
+    has_permission = await get_permission(user.id, "resetpersonname")
     if not has_permission:
         await permission_denied_procedure(message, "admin_only")
         return
@@ -961,14 +986,14 @@ async def send_in_broadcast(message):
     user = message.from_user
     bot_answer = get_localized_string("broadcast", await get_lang(user.id), "msg_to_send")
 
-    is_admin = get_admin(user.id)
+    is_admin = await get_admin(user.id)
     has_permission = await get_permission(user.id, "broadcast")
     if not is_admin or not has_permission:
         await permission_denied_procedure(message, "admin_only")
         return
     
     await bot.reply_to(message, bot_answer)
-    bot.register_next_step_handler(message, broadcast)
+    await set_event(message, broadcast)
     await logging_procedure(message, bot_answer)
 
 #banned words events
@@ -984,7 +1009,7 @@ async def add_banned(message):
         return
     
     await bot.reply_to(message, bot_answer)
-    bot.register_next_step_handler(message, add_banned_words, "banned")
+    await set_event(message, add_banned_words, content="banned")
     await logging_procedure(message, bot_answer)
 
 @bot.message_handler(commands=["removebanned"])
@@ -999,7 +1024,7 @@ async def remove_banned(message):
         return
     
     await bot.reply_to(message, bot_answer)
-    bot.register_next_step_handler(message, remove_banned_words, "banned")
+    await set_event(message, remove_banned_words, content="banned")
     await logging_procedure(message, bot_answer)
 
 @bot.message_handler(commands=["addultrabanned"])
@@ -1014,7 +1039,7 @@ async def add_ultra_banned(message):
         return
     
     await bot.reply_to(message, bot_answer)
-    bot.register_next_step_handler(message, add_banned_words, "ultrabanned")
+    await set_event(message, add_banned_words, content="ultrabanned")
     await logging_procedure(message, bot_answer)
 
 @bot.message_handler(commands=["removeultrabanned"])
@@ -1022,28 +1047,28 @@ async def remove_ultra_banned(message):
     user = message.from_user
     bot_answer = get_localized_string("banned_words", await get_lang(user.id), "remove_banned")
 
-    is_admin = get_admin(user.id)
-    has_permission = get_permission(user.id, "removebanned")
+    is_admin = await get_admin(user.id)
+    has_permission = await get_permission(user.id, "removebanned")
     if not is_admin or not has_permission:
         await permission_denied_procedure(message, "admin_only")
         return
     
     await bot.reply_to(message, bot_answer)
-    bot.register_next_step_handler(message, remove_banned_words, "ultrabanned")
+    await set_event(message, remove_banned_words, content="ultrabanned")
     await logging_procedure(message, bot_answer)
 
 #custom commands events
 @bot.message_handler(commands=["getcommandslist"])
 async def get_command_list(message):
     user = message.from_user
-    is_admin = get_admin(user.id)
+    is_admin = await get_admin(user.id)
 
     if not is_admin:
         await permission_denied_procedure(message, "admin_only")
         return
 
     bot_answer = get_localized_string("custom_commands", await get_lang(user.id), "list")
-    for command in get_custom_commands_names():
+    for command in await get_custom_commands_names():
         bot_answer += (f"\n{command}")
 
     await bot.reply_to(message, bot_answer)
@@ -1061,12 +1086,12 @@ async def add_command(message):
         return
     
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True, selective=True)
-    for command in get_custom_commands_names():
+    for command in await get_custom_commands_names():
         button = types.KeyboardButton(command)
         markup.add(button)
     
     await bot.reply_to(message, bot_answer, reply_markup=markup)
-    bot.register_next_step_handler(message, ask_custom_command_content)
+    await set_event(message, ask_custom_command_content)
     await logging_procedure(message, bot_answer)
 
 @bot.message_handler(commands=["removecommand"])
@@ -1081,12 +1106,12 @@ async def remove_command(message):
         return
     
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True, selective=True)
-    for command in get_custom_commands_names():
+    for command in await get_custom_commands_names():
         button = types.KeyboardButton(command)
         markup.add(button)
     
     await bot.reply_to(message, bot_answer, reply_markup=markup)
-    bot.register_next_step_handler(message, remove_custom_command)
+    await set_event(message, remove_custom_command)
     await logging_procedure(message, bot_answer)
 
 @bot.message_handler(func= lambda message: message.text.startswith('/'))
@@ -1094,7 +1119,7 @@ async def handle_custom_commands(message):
     """Handle dynamically generated commands"""
     user = message.from_user
     command = message.text[1:]
-    if command in get_custom_commands_names():
+    if command in await get_custom_commands_names():
         has_permission = await get_permission(user.id, command)
         if not has_permission:
             await permission_denied_procedure(message, has_permission)
@@ -1115,7 +1140,29 @@ async def handle_custom_commands(message):
     else: await log_and_update(message)
 
 #General handlers
-@bot.message_handler(content_types=["photo", "video", "sticker", "animation", "document", "audio", "voice"])
+@bot.message_handler(content_types=["text","photo", "video", "sticker", "animation", "document", "audio", "voice"],func= lambda commands:True)
+async def handle_events(message):
+    user = message.from_user
+    await store_user_data(user, message.chat.id)
+
+    functions = {"validate_target" : validate_target, "set_botname" : set_botname, "send_message" : send_message, "broadcast" : broadcast, "generate_qrcode" : generate_qrcode, "reset_botname" : reset_botname,
+                 "ask_custom_command_content" : ask_custom_command_content, "add_custom_command" : add_custom_command, "remove_custom_command" : remove_custom_command, "set_excl_sentence" : set_excl_sentence,
+                 "set_permission" : set_permission, "set_lang" : set_lang, "set_gender" : set_gender, "get_info" : get_info, "get_permissions_list" : get_permissions_list, "set_admin" : set_admin,
+                 "add_banned_words" : add_banned_words, "remove_banned_words" : remove_banned_words}
+    event = await get_event(user.id)
+
+    if event:
+        await cancel_command(message, False)
+        if event["command"]:
+            await functions[event["next"]](message, event["command"], event["second_arg"])
+        elif event["content"]:
+           await functions[event["next"]](message, event["content"]) 
+        else: await functions[event["next"]](message)
+    
+    else: 
+        if message.text == None: await handle_media(message)
+        else: await log_and_update(message)
+
 async def handle_media(message):
     user = message.from_user
     lang = await get_lang(user.id)
@@ -1126,7 +1173,6 @@ async def handle_media(message):
     await bot.reply_to(message, bot_answer)
     await logging_procedure(message, bot_answer)
 
-@bot.message_handler(func= lambda commands:True)
 async def log_and_update(message):
     """Logs messages and updates the database"""
     user = message.from_user

@@ -17,6 +17,7 @@ commands_it = [
     types.BotCommand("notifications", "Attiva/Disattiva le notifiche"),
     types.BotCommand("info", "Restituisce le informazioni memorizzate dal bot"),
     types.BotCommand("permissionlist", "Restituisce lo stato attuale dei permessi per i vari comandi"),
+    types.BotCommand("cancel", "Cancella un comando in corso"),
     types.BotCommand("about", "Restituisce informazioni sul bot")
 ]
 commands_en = [
@@ -34,6 +35,7 @@ commands_en = [
     types.BotCommand("notifications", "Turn on/off the notifications"),
     types.BotCommand("info", "Return the infos the bot has about you"),
     types.BotCommand("permissionlist", "Return current permissions status for the various commands"),
+    types.BotCommand("cancel", "Cancel pending commands"),
     types.BotCommand("about", "Return infos about the bot")
 ]
 
@@ -291,5 +293,9 @@ localizations = { #This dict contains all the texts in the bot in a JSON-like fo
             "not_found" : "Comando non trovato!",
             "list" : "Lista dei comandi personalizzati:"
         }
+    },
+    "cancel" : {
+        "en" : "Command cancelled and markup cleared!",
+        "it" : "Operazione annullata e markup rimosso!"
     }
 }
