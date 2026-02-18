@@ -48,7 +48,7 @@ class Bot_DB_Manager:
         await self.db.close()
 
 class Bot(AsyncTeleBot):
-    def __init__(self, token, owner_id, db_path, log_path="logs", log=False, dev_mode=False, localizations=localizations):
+    def __init__(self, token, owner_id, db_path, log_path="logs", log=False, dev_mode=False, commands=commands, localizations=localizations):
         super().__init__(token)
         self.OWNER_ID = owner_id
         self.db = Bot_DB_Manager(db_path, "users", "banned_words", "custom_commands")
@@ -60,6 +60,7 @@ class Bot(AsyncTeleBot):
         self.LOG = log
         self.DEV_MODE = dev_mode
 
+        self.commands = commands
         self.localizations = localizations
         self.functions = {"validate_target" : self.validate_target, "set_botname" : self.set_botname, "send_message_to" : self.send_message_to, "broadcast" : self.broadcast, "generate_qrcode" : self.generate_qrcode, "reset_botname" : self.reset_botname,
                     "ask_custom_command_content" : self.ask_custom_command_content, "add_custom_command" : self.add_custom_command, "remove_custom_command" : self.remove_custom_command, "set_excl_sentence" : self.set_excl_sentence,
@@ -351,7 +352,7 @@ class Bot(AsyncTeleBot):
         else: return "en"
 
     async def set_lang(self, message, us_id : int):
-        """Change the bot language, for the user identified by us_id, into italian or english"""
+        """Change the bot language, for the user identified by us_id"""
         viewed_name = await self.get_viewed_name(us_id)
         if await self.get_lang(us_id) == "it":
             bot_answer = f"{viewed_name} {self.get_localized_string("set_lang", "en")}"
@@ -1208,8 +1209,9 @@ class Bot(AsyncTeleBot):
                 await log_file.write(f"{user.id}, {user_info}: {content}\n")
 
     async def main(self):
-        await self.set_my_commands(commands_en) #default
-        await self.set_my_commands(commands_it, language_code="it")
+        await self.set_my_commands(self.commands["en"]) #default
+        for code, commands_list in self.commands.items():
+            await self.set_my_commands(commands_list, language_code=code)
 
         await self.send_on_off_notification("online")
 
