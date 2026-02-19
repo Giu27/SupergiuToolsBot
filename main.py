@@ -48,7 +48,7 @@ class Bot_DB_Manager:
         await self.db.close()
 
 class Bot(AsyncTeleBot):
-    def __init__(self, token, owner_id, db_path, log_path="logs", log=False, dev_mode=False, commands=commands, localizations=localizations):
+    def __init__(self, token, owner_id, db_path, log_path="logs", log=False, dev_mode=False, commands=commands, languages=["en", "it"], localizations=localizations):
         super().__init__(token)
         self.OWNER_ID = owner_id
         self.db = Bot_DB_Manager(db_path, "users", "banned_words", "custom_commands")
@@ -60,11 +60,12 @@ class Bot(AsyncTeleBot):
         self.LOG = log
         self.DEV_MODE = dev_mode
 
+        self.languages = languages
         self.commands = commands
         self.localizations = localizations
         self.functions = {"validate_target" : self.validate_target, "set_botname" : self.set_botname, "send_message_to" : self.send_message_to, "broadcast" : self.broadcast, "generate_qrcode" : self.generate_qrcode, "reset_botname" : self.reset_botname,
                     "ask_custom_command_content" : self.ask_custom_command_content, "add_custom_command" : self.add_custom_command, "remove_custom_command" : self.remove_custom_command, "set_excl_sentence" : self.set_excl_sentence,
-                    "set_permission" : self.set_permission, "set_lang" : self.set_lang, "set_gender" : self.set_gender, "get_info" : self.get_info, "get_permissions_list" : self.get_permissions_list, "set_admin" : self.set_admin,
+                    "set_permission" : self.set_permission, "set_user_lang" : self.set_user_lang, "set_gender" : self.set_gender, "get_info" : self.get_info, "get_permissions_list" : self.get_permissions_list, "set_admin" : self.set_admin,
                     "add_banned_words" : self.add_banned_words, "remove_banned_words" : self.remove_banned_words, "handle_multiple_users" : self.handle_multiple_users}
         
         self.register_message_handler(self.send_greets, commands=["start", "hello"])
@@ -104,6 +105,7 @@ class Bot(AsyncTeleBot):
         self.register_message_handler(self.remove_command, commands=["removecommand"])
         self.register_message_handler(self.handle_custom_commands, func= lambda message: message.text.startswith('/'))
         self.register_message_handler(self.handle_events, content_types=["text","photo", "video", "sticker", "animation", "document", "audio", "voice"],func= lambda commands:True)
+        self.register_callback_query_handler(self.handle_lang_buttons, func=lambda call: call.data.startswith("lang_"))
 
     async def store_user_data(self, user, chat_id : int):
         """Creates and updates the user data in the database"""
@@ -345,25 +347,22 @@ class Bot(AsyncTeleBot):
         await self.reply_to(message, bot_answer)
         await self.logging_procedure(message, bot_answer)
 
+    async def handle_lang_buttons(self, call):
+        await self.answer_callback_query(call.id)
+        data = call.data.split("_")
+        us_id = int(data[1])
+        await self.set_lang(us_id, data[2])
+        await self.edit_message_text(f"{await self.get_viewed_name(us_id)} " + self.get_localized_string("set_lang", await self.get_lang(us_id), "confirmation"),call.message.chat.id,call.message.id)
+
     async def get_lang(self, us_id : int) -> str:
         """Returns the user language code, if not found defaults to en"""
         localization = await self.db.get_single_doc("users", self.db.query.user_id == us_id, "localization")
         if localization: return localization
-        else: return "en"
+        else: return self.languages[0]
 
-    async def set_lang(self, message, us_id : int):
+    async def set_lang(self, us_id : int, lang : str):
         """Change the bot language, for the user identified by us_id"""
-        viewed_name = await self.get_viewed_name(us_id)
-        if await self.get_lang(us_id) == "it":
-            bot_answer = f"{viewed_name} {self.get_localized_string("set_lang", "en")}"
-            lang = "en"
-        else:
-            bot_answer = f"{viewed_name} {self.get_localized_string("set_lang", "it")}"
-            lang = "it"
-
         await self.db.upsert_values("users", {"localization" : lang}, self.db.query.user_id == us_id)
-        await self.reply_to(message, bot_answer)
-        await self.logging_procedure(message, bot_answer)
 
     async def get_gender(self, us_id : int) -> str:
         """Returns the user gender, if not found defaults to m(ale)"""
@@ -751,15 +750,22 @@ class Bot(AsyncTeleBot):
         await self.reply_to(message, bot_answer)
         await self.logging_procedure(message, bot_answer)
     
-    async def set_user_lang(self, message):
+    async def set_user_lang(self, message, us_id=None):
         user = message.from_user
+        if not us_id: us_id = user.id
+        bot_answer = self.get_localized_string("set_lang",await self.get_lang(user.id), "choice")
+        markup = types.InlineKeyboardMarkup()
+        for lang in self.languages:
+            button = types.InlineKeyboardButton(lang, callback_data="lang_"+str(us_id)+"_"+lang)
+            markup.add(button)
 
         has_permission = await self.get_permission(user.id, "lang")
         if has_permission != True:
             await self.permission_denied_procedure(message, has_permission)
             return
         
-        await self.set_lang(message, user.id)
+        await self.reply_to(message, bot_answer, reply_markup=markup)
+        await self.logging_procedure(message, bot_answer)
     
     async def set_name(self, message):
         """Start the event chain to set the user's botname"""
@@ -972,7 +978,7 @@ class Bot(AsyncTeleBot):
             await self.permission_denied_procedure(message, "admin_only")
             return
         
-        await self.ask_target(message, self.set_lang, False)
+        await self.ask_target(message, self.set_user_lang, False)
     
     async def set_person_gender(self, message):
         user = message.from_user

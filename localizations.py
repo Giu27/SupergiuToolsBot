@@ -111,8 +111,14 @@ localizations = { #This dict contains all the texts in the bot in a JSON-like fo
         }
     },
     "set_lang" : {
-        "en" : "will now receive messages in english",
-        "it" : "riceverà i messaggi in italiano."
+        "en" : {
+            "confirmation" : "will now receive messages in english",
+            "choice" : "Choose the language to use."
+        },
+        "it" : {
+            "confirmation" : "riceverà i messaggi in italiano.",
+            "choice" : "Scegli la lingua da utilizzare"
+        }
     },
     "handle_media" : {
         "en" : {
