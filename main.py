@@ -1,4 +1,4 @@
-#Copyright (C) 2025  Giuseppe Caruso
+#Copyright (C) 2025-2026  Giuseppe Caruso
 import telebot, os, logging, qrcode, wikipedia, random, faker, unidecode, asyncio, aiofiles
 from telebot.async_telebot import AsyncTeleBot
 from dotenv import load_dotenv
