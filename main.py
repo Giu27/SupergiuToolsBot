@@ -48,7 +48,8 @@ class Bot_DB_Manager:
         await self.db.close()
 
 class Bot(AsyncTeleBot):
-    def __init__(self, token, owner_id, db_path, log_path="logs", log=False, dev_mode=False, commands=commands, languages={"en" : "English", "it" : "Italiano"}, localizations=localizations):
+    def __init__(self, token : str, owner_id : int, db_path : str, log_path : str="logs", log : bool=False, dev_mode : bool=False, commands : dict[str, list[types.BotCommand]]=commands, languages : dict[str, str]={"en" : "English", "it" : "Italiano"}, localizations : dict[str, dict[str, str]]=localizations, genders : list=["m", "f", "nb"]):
+        """Inits the bot by setting up database and basic configuration"""
         super().__init__(token)
         self.OWNER_ID = owner_id
         self.db = Bot_DB_Manager(db_path, "users", "banned_words", "custom_commands")
@@ -57,17 +58,20 @@ class Bot(AsyncTeleBot):
         logging.basicConfig(level=logging.INFO)
         self.logger = logging.getLogger(__name__)
 
-        self.LOG = log
-        self.DEV_MODE = dev_mode
+        self.LOG = log #when enabled logs messages to console and file
+        self.DEV_MODE = dev_mode #when enabled the bot status notification is disabled
 
-        self.languages = languages
-        self.commands = commands
-        self.localizations = localizations
+        self.languages = languages #A dict containing languages {lang_code : lang_label} i.e. {"en" : English}
+        self.commands = commands #Dict containing the commands shown in telegram menù in various languages
+        self.localizations = localizations #A dict containing the texts used by the bot: {source: {lang : [element]}} 
+        self.genders = genders #List of genders the bots uses to create the menù
+        #List of functions authorized to be executed by the event system
         self.functions = {"validate_target" : self.validate_target, "set_botname" : self.set_botname, "send_message_to" : self.send_message_to, "broadcast" : self.broadcast, "generate_qrcode" : self.generate_qrcode, "reset_botname" : self.reset_botname,
                     "ask_custom_command_content" : self.ask_custom_command_content, "add_custom_command" : self.add_custom_command, "remove_custom_command" : self.remove_custom_command, "set_excl_sentence" : self.set_excl_sentence,
-                    "set_permission" : self.set_permission, "set_user_lang" : self.set_user_lang, "set_gender" : self.set_gender, "get_info" : self.get_info, "get_permissions_list" : self.get_permissions_list, "set_admin" : self.set_admin,
+                    "set_permission" : self.set_permission, "set_user_lang" : self.set_user_lang, "set_user_gender" : self.set_user_gender, "get_info" : self.get_info, "get_permissions_list" : self.get_permissions_list, "set_admin" : self.set_admin,
                     "add_banned_words" : self.add_banned_words, "remove_banned_words" : self.remove_banned_words, "handle_multiple_users" : self.handle_multiple_users}
         
+        #Register handlers
         self.register_message_handler(self.send_greets, commands=["start", "hello"])
         self.register_message_handler(self.set_user_lang, commands=["lang"])
         self.register_message_handler(self.set_name, commands=["setname"])
@@ -106,6 +110,7 @@ class Bot(AsyncTeleBot):
         self.register_message_handler(self.handle_custom_commands, func= lambda message: message.text.startswith('/'))
         self.register_message_handler(self.handle_events, content_types=["text","photo", "video", "sticker", "animation", "document", "audio", "voice"],func= lambda commands:True)
         self.register_callback_query_handler(self.handle_lang_buttons, func=lambda call: call.data.startswith("lang_"))
+        self.register_callback_query_handler(self.handle_gender_buttons, func=lambda call: call.data.startswith("gender_"))
 
     async def store_user_data(self, user, chat_id : int):
         """Creates and updates the user data in the database"""
@@ -248,7 +253,7 @@ class Bot(AsyncTeleBot):
                 await self.db.upsert_values("users", {"bot_name" : botname}, self.db.query.user_id == us_id)
         return botname
 
-    async def set_botname(self, message, us_id : int, randomName=False):
+    async def set_botname(self, message, us_id : int, randomName : bool=False):
         """Updates the botname of the user identified by us_id"""
         user = message.from_user
         name = message.text
@@ -348,6 +353,7 @@ class Bot(AsyncTeleBot):
         await self.logging_procedure(message, bot_answer)
 
     async def handle_lang_buttons(self, call):
+        """Callback when a button related to language selection is pressed"""
         user = call.from_user
         await self.answer_callback_query(call.id)
         data = call.data.split("_")
@@ -365,30 +371,24 @@ class Bot(AsyncTeleBot):
         """Change the bot language, for the user identified by us_id"""
         await self.db.upsert_values("users", {"localization" : lang}, self.db.query.user_id == us_id)
 
+    async def handle_gender_buttons(self, call):
+        """Callback when a button related to gender selection is pressed"""
+        user = call.from_user
+        await self.answer_callback_query(call.id)
+        data = call.data.split("_")
+        us_id = int(data[1])
+        await self.set_gender(us_id, data[2])
+        await self.edit_message_text(f"{await self.get_viewed_name(us_id)} {self.get_localized_string("set_gender", await self.get_lang(user.id), data[2])}", call.message.chat.id, call.message.id)
+
     async def get_gender(self, us_id : int) -> str:
         """Returns the user gender, if not found defaults to m(ale)"""
         gender = await self.db.get_single_doc("users", self.db.query.user_id == us_id, "gender")
         if gender: return gender
-        else: return 'm'
+        else: return self.genders[0]
 
-    async def set_gender(self, message, us_id : int):
+    async def set_gender(self, us_id : int, gender : str):
         """Change the gender of the name chosen by randomname, for the user identified by us_id"""
-        viewed_name = await self.get_viewed_name(us_id)
-        user = message.from_user
-        lang = await self.get_lang(user.id)
-        if await self.get_gender(us_id) == 'm':
-            bot_answer = f"{viewed_name} {self.get_localized_string("set_gender", lang, 'f')}"
-            gender = 'f'
-        elif await self.get_gender(us_id) == 'f':
-            bot_answer = f"{viewed_name} {self.get_localized_string("set_gender", lang, 'nb')}"
-            gender = 'nb'
-        else:
-            bot_answer = f"{viewed_name} {self.get_localized_string("set_gender", lang, 'm')}"
-            gender = 'm'
-    
         await self.db.upsert_values("users", {"gender" : gender}, self.db.query.user_id == us_id)
-        await self.reply_to(message, bot_answer)
-        await self.logging_procedure(message, bot_answer)
 
     async def get_admin(self, us_id : int) -> bool:
         """Return true if the user identified by us_id is admin, false otherwise"""
@@ -511,7 +511,7 @@ class Bot(AsyncTeleBot):
             await self.reply_to(message, bot_answer)
             await self.logging_procedure(message, bot_answer)
 
-    async def broadcast(self, message, admin_only=False):
+    async def broadcast(self, message, admin_only : bool=False):
         """Send a message to all the users of the bot, or if admin only to just the admins"""
         acknowledge = True
         async for user in self.db.tables["users"]:
@@ -577,6 +577,7 @@ class Bot(AsyncTeleBot):
         await self.ask_argument(message, command, us_id, second_arg)
 
     async def handle_multiple_users(self, message, command : callable, second_arg : bool = True):
+        """When multiple users are found, this function reroutes the chosen target id to the command"""
         admin_user = message.from_user
         lang = await self.get_lang(admin_user.id)
 
@@ -681,6 +682,7 @@ class Bot(AsyncTeleBot):
         await self.logging_procedure(message, bot_answer)
 
     async def add_custom_command(self, message, name : str):
+        """Adds a custom command to the database"""
         user = message.from_user
         if message.content_type == "photo": file_id = message.photo[-1].file_id
         elif message.content_type == "audio": file_id = message.audio.file_id
@@ -700,6 +702,7 @@ class Bot(AsyncTeleBot):
         await self.logging_procedure(message, bot_answer)
 
     async def remove_custom_command(self, message):
+        """Removes a custom command from the database"""
         user = message.from_user
         markup = types.ReplyKeyboardRemove()
 
@@ -715,7 +718,8 @@ class Bot(AsyncTeleBot):
         await self.reply_to(message, bot_answer, reply_markup=markup)
         await self.logging_procedure(message, bot_answer)
 
-    def generate_wikipedia_event(self, lang):
+    def generate_wikipedia_event(self, lang : str):
+        """Generate a string containing an event that happened on this day."""
         wikipedia.set_lang("it")
         engToIta = {"January": "gennaio", "February" : "febbraio", "March" : "marzo", "April" : "aprile", "May" : "maggio", "June" : "giugno",
                     "July" : "luglio", "August" : "agosto", "September" : "settembre", "October" : "ottobre" , "November" : "novembre", "December" : "dicembre"}
@@ -751,7 +755,7 @@ class Bot(AsyncTeleBot):
         await self.reply_to(message, bot_answer)
         await self.logging_procedure(message, bot_answer)
     
-    async def set_user_lang(self, message, us_id=None):
+    async def set_user_lang(self, message, us_id : int=None):
         user = message.from_user
         if not us_id: us_id = user.id
         bot_answer = self.get_localized_string("set_lang",await self.get_lang(user.id), "choice")
@@ -822,7 +826,7 @@ class Bot(AsyncTeleBot):
         await self.logging_procedure(message, bot_answer)
     
     async def events_on_wikipedia(self, message):
-        """send a random event of the day from italian wikipedia"""
+        """send a random event of the day from italian wikipedia (traslated with google when the language differs)"""
         user = message.from_user
         lang = await self.get_lang(user.id)
         loop = asyncio.get_running_loop()
@@ -830,16 +834,23 @@ class Bot(AsyncTeleBot):
         await self.reply_to(message, bot_answer)
         await self.logging_procedure(message, bot_answer)
     
-    async def set_user_gender(self, message):
+    async def set_user_gender(self, message, us_id : int=None):
         """Call function to set the user's gender"""
         user = message.from_user
+        if not us_id: us_id = user.id
+        bot_answer = self.get_localized_string("set_gender",await self.get_lang(user.id), "choice")
+        markup = types.InlineKeyboardMarkup()
+        for gender in self.genders:
+            button = types.InlineKeyboardButton(self.get_localized_string("set_gender",await self.get_lang(user.id), gender+"_label"), callback_data="gender_"+str(us_id)+"_"+gender)
+            markup.add(button)
 
         has_permission = await self.get_permission(user.id, "gender")
         if has_permission != True:
             await self.permission_denied_procedure(message, has_permission)
             return
         
-        await self.set_gender(message, user.id)
+        await self.reply_to(message, bot_answer, reply_markup=markup)
+        await self.logging_procedure(message, bot_answer)
     
     async def random_number(self, message):
         """Return the user a random number"""
@@ -858,6 +869,7 @@ class Bot(AsyncTeleBot):
         await self.set_botname(message, user.id, True)
     
     async def request_qrcode(self, message):
+        """Allows the user to generate a qr code containing text"""
         user = message.from_user
         chat_id = await self.get_chat_id(user.id)
         has_permission = await self.get_permission(user.id, "qrcode")
@@ -871,6 +883,7 @@ class Bot(AsyncTeleBot):
         await self.logging_procedure(message, bot_answer)
     
     async def set_notifications(self, message):
+        """Allows the user to enable/disable the status notifications"""
         user = message.from_user
         lang = await self.get_lang(user.id)
         
@@ -896,6 +909,7 @@ class Bot(AsyncTeleBot):
         await self.get_permissions_list(message, user.id)
     
     async def cancel_command(self, message, reply : bool = True):
+        """Delete any pending event"""
         user = message.from_user
         markup = types.ReplyKeyboardRemove()
         await self.db.upsert_values("users", {"event" : None}, self.db.query.user_id == user.id)
@@ -988,7 +1002,7 @@ class Bot(AsyncTeleBot):
             await self.permission_denied_procedure(message, "admin_only")
             return
         
-        await self.ask_target(message, self.set_gender, False)
+        await self.ask_target(message, self.set_user_gender, False)
     
     async def get_ids(self, message):
         """Returns a list with all the bot users"""
@@ -1009,6 +1023,7 @@ class Bot(AsyncTeleBot):
         await self.logging_procedure(message, bot_answer.lstrip())
     
     async def send_to_target(self, message):
+        """Allows an admin to send messages to a specific user"""
         user = message.from_user
         has_permission = await self.get_permission(user.id, "sendto")
         if not has_permission:
@@ -1032,7 +1047,7 @@ class Bot(AsyncTeleBot):
         await self.set_event(message, self.broadcast)
         await self.logging_procedure(message, bot_answer)
 
-    #banned words events    
+    #Commands to add/remove words to/from the banned list    
     async def add_banned(self, message):
         user = message.from_user
         bot_answer = self.get_localized_string("banned_words", await self.get_lang(user.id), "add_banned")
@@ -1172,6 +1187,7 @@ class Bot(AsyncTeleBot):
 
     #General handlers
     async def handle_events(self, message):
+        """Handle functions waiting for inputs or that need to be called automatically"""
         user = message.from_user
         await self.store_user_data(user, message.chat.id)
 
@@ -1190,6 +1206,7 @@ class Bot(AsyncTeleBot):
             else: await self.log_and_update(message)
 
     async def handle_media(self,message):
+        """Handles media sent from the user"""
         user = message.from_user
         lang = await self.get_lang(user.id)
 
@@ -1216,7 +1233,7 @@ class Bot(AsyncTeleBot):
                 await log_file.write(f"{user.id}, {user_info}: {content}\n")
 
     async def main(self):
-        await self.set_my_commands(self.commands["en"]) #default
+        await self.set_my_commands(self.commands["en"]) #default commands list
         for code, commands_list in self.commands.items():
             await self.set_my_commands(commands_list, language_code=code)
 
@@ -1232,8 +1249,8 @@ class Bot(AsyncTeleBot):
 if __name__ == "__main__":
     load_dotenv()
 
-    DEV_MODE = True #switches on/off the online/offline notification if testing on a database with multiple users is needed
-    LOG = True #switches on/off the logging of messages received by the bot
+    DEV_MODE = False #switches on/off the online/offline notification if testing on a database with multiple users is needed
+    LOG = False #switches on/off the logging of messages received by the bot
 
     BOT_TOKEN = os.environ.get("BOT_TOKEN")
     OWNER_ID = int(os.environ.get("OWNER_ID"))

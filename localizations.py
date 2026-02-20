@@ -250,14 +250,22 @@ localizations = { #This dict contains all the texts in the bot in a JSON-like fo
     },
     "set_gender" : {
         "en" : {
+            "choice" : "Choose the gender:",
             "m" : "will now be considered male.",
             "f" : "will now be considered female.",
-            "nb": "will now be considered other/non-binary"
+            "nb": "will now be considered other/non-binary.",
+            "m_label" : "Male",
+            "f_label" : "Female",
+            "nb_label" : "Non-Binary"
         },
         "it" : {
+            "choice" : "Indica il genere:",
             "m" : "sarà ora considerato maschio.",
             "f" : "sarà ora considerata femmina.",
-            "nb": "sarà ora considerato altro/non-binario"
+            "nb": "sarà ora considerato altro/non-binario.",
+            "m_label" : "Maschio",
+            "f_label" : "Femmina",
+            "nb_label" : "Non Binario"
         },
     },
     "info" : {
