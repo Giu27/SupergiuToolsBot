@@ -48,7 +48,7 @@ class Bot_DB_Manager:
         await self.db.close()
 
 class Bot(AsyncTeleBot):
-    def __init__(self, token, owner_id, db_path, log_path="logs", log=False, dev_mode=False, commands=commands, languages=["en", "it"], localizations=localizations):
+    def __init__(self, token, owner_id, db_path, log_path="logs", log=False, dev_mode=False, commands=commands, languages={"en" : "English", "it" : "Italiano"}, localizations=localizations):
         super().__init__(token)
         self.OWNER_ID = owner_id
         self.db = Bot_DB_Manager(db_path, "users", "banned_words", "custom_commands")
@@ -348,11 +348,12 @@ class Bot(AsyncTeleBot):
         await self.logging_procedure(message, bot_answer)
 
     async def handle_lang_buttons(self, call):
+        user = call.from_user
         await self.answer_callback_query(call.id)
         data = call.data.split("_")
         us_id = int(data[1])
         await self.set_lang(us_id, data[2])
-        await self.edit_message_text(f"{await self.get_viewed_name(us_id)} " + self.get_localized_string("set_lang", await self.get_lang(us_id), "confirmation"),call.message.chat.id,call.message.id)
+        await self.edit_message_text(f"{await self.get_viewed_name(us_id)} {self.get_localized_string("set_lang", await self.get_lang(user.id), "confirmation")} {self.languages[data[2]]}.", call.message.chat.id, call.message.id)
 
     async def get_lang(self, us_id : int) -> str:
         """Returns the user language code, if not found defaults to en"""
@@ -755,8 +756,8 @@ class Bot(AsyncTeleBot):
         if not us_id: us_id = user.id
         bot_answer = self.get_localized_string("set_lang",await self.get_lang(user.id), "choice")
         markup = types.InlineKeyboardMarkup()
-        for lang in self.languages:
-            button = types.InlineKeyboardButton(lang, callback_data="lang_"+str(us_id)+"_"+lang)
+        for lang, label in self.languages.items():
+            button = types.InlineKeyboardButton(label, callback_data="lang_"+str(us_id)+"_"+lang)
             markup.add(button)
 
         has_permission = await self.get_permission(user.id, "lang")
