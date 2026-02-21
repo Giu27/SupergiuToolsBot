@@ -2,42 +2,44 @@
 #File containing the various bot localization strings
 from telebot import types
 
-commands_it = [
-    types.BotCommand("hello", "Saluta l'utente"),
-    types.BotCommand("lang", "Cambia la lingua del bot"),
-    types.BotCommand("setname", "Modifica il tuo nome"),
-    types.BotCommand("resetname", "Ripristina il tuo nome originale"),
-    types.BotCommand("sendtoowner", "Invia un messaggio all'owner"),
-    types.BotCommand("sendtoadmin", "Invia un messaggio a tutti gli admin"),
-    types.BotCommand("eventstoday", "Restituisce curiosità storiche sulla data di oggi"),
-    types.BotCommand("gender", "Permette all'utente di cambiare il genere utilizzato da randomname (m -> f -> nb -> m)"),
-    types.BotCommand("randomnumber", "Restituisce un numero casuale tra 0 e 999"),
-    types.BotCommand("randomname", "Imposta un nome casuale"),
-    types.BotCommand("qrcode", "Crea un QR Code di un contenuto testuale inviato"),
-    types.BotCommand("notifications", "Attiva/Disattiva le notifiche"),
-    types.BotCommand("info", "Restituisce le informazioni memorizzate dal bot"),
-    types.BotCommand("permissionlist", "Restituisce lo stato attuale dei permessi per i vari comandi"),
-    types.BotCommand("cancel", "Cancella un comando in corso"),
-    types.BotCommand("about", "Restituisce informazioni sul bot")
-]
-commands_en = [
-    types.BotCommand("hello", "Greets the user"),
-    types.BotCommand("lang", "Changes the bot language"),
-    types.BotCommand("setname", "Set your name"),
-    types.BotCommand("resetname", "Reset to your original name"),
-    types.BotCommand("sendtoowner", "Send a message to the bot's owner"),
-    types.BotCommand("sendtoadmin", "Send a message to the bot's admins"),
-    types.BotCommand("eventstoday", "Return a fun fact about this day in history"),
-    types.BotCommand("gender", "Let user change the gender used by randomname (m -> f -> nb -> m)"),
-    types.BotCommand("randomnumber", "Return a random number in the 0 to 999 range"),
-    types.BotCommand("randomname", "Set a random name"),
-    types.BotCommand("qrcode", "Let the user creates a QR Code from text"),
-    types.BotCommand("notifications", "Turn on/off the notifications"),
-    types.BotCommand("info", "Return the infos the bot has about you"),
-    types.BotCommand("permissionlist", "Return current permissions status for the various commands"),
-    types.BotCommand("cancel", "Cancel pending commands"),
-    types.BotCommand("about", "Return infos about the bot")
-]
+commands = {
+    "it" : [
+        types.BotCommand("hello", "Saluta l'utente"),
+        types.BotCommand("lang", "Cambia la lingua del bot"),
+        types.BotCommand("setname", "Modifica il tuo nome"),
+        types.BotCommand("resetname", "Ripristina il tuo nome originale"),
+        types.BotCommand("sendtoowner", "Invia un messaggio all'owner"),
+        types.BotCommand("sendtoadmin", "Invia un messaggio a tutti gli admin"),
+        types.BotCommand("eventstoday", "Restituisce curiosità storiche sulla data di oggi"),
+        types.BotCommand("gender", "Permette all'utente di cambiare il genere utilizzato da randomname (m -> f -> nb -> m)"),
+        types.BotCommand("randomnumber", "Restituisce un numero casuale tra 0 e 999"),
+        types.BotCommand("randomname", "Imposta un nome casuale"),
+        types.BotCommand("qrcode", "Crea un QR Code di un contenuto testuale inviato"),
+        types.BotCommand("notifications", "Attiva/Disattiva le notifiche"),
+        types.BotCommand("info", "Restituisce le informazioni memorizzate dal bot"),
+        types.BotCommand("permissionlist", "Restituisce lo stato attuale dei permessi per i vari comandi"),
+        types.BotCommand("cancel", "Cancella un comando in corso"),
+        types.BotCommand("about", "Restituisce informazioni sul bot")
+    ], 
+    "en" : [
+        types.BotCommand("hello", "Greets the user"),
+        types.BotCommand("lang", "Changes the bot language"),
+        types.BotCommand("setname", "Set your name"),
+        types.BotCommand("resetname", "Reset to your original name"),
+        types.BotCommand("sendtoowner", "Send a message to the bot's owner"),
+        types.BotCommand("sendtoadmin", "Send a message to the bot's admins"),
+        types.BotCommand("eventstoday", "Return a fun fact about this day in history"),
+        types.BotCommand("gender", "Let user change the gender used by randomname (m -> f -> nb -> m)"),
+        types.BotCommand("randomnumber", "Return a random number in the 0 to 999 range"),
+        types.BotCommand("randomname", "Set a random name"),
+        types.BotCommand("qrcode", "Let the user creates a QR Code from text"),
+        types.BotCommand("notifications", "Turn on/off the notifications"),
+        types.BotCommand("info", "Return the infos the bot has about you"),
+        types.BotCommand("permissionlist", "Return current permissions status for the various commands"),
+        types.BotCommand("cancel", "Cancel pending commands"),
+        types.BotCommand("about", "Return infos about the bot")
+    ]
+}
 
 localizations = { #This dict contains all the texts in the bot in a JSON-like format
     "not_found" : {
@@ -109,8 +111,14 @@ localizations = { #This dict contains all the texts in the bot in a JSON-like fo
         }
     },
     "set_lang" : {
-        "en" : "will now receive messages in english",
-        "it" : "riceverà i messaggi in italiano."
+        "en" : {
+            "confirmation" : "will now receive messages in",
+            "choice" : "Choose the language to use:"
+        },
+        "it" : {
+            "confirmation" : "riceverà i messaggi in",
+            "choice" : "Scegli la lingua da utilizzare:"
+        }
     },
     "handle_media" : {
         "en" : {
@@ -242,14 +250,22 @@ localizations = { #This dict contains all the texts in the bot in a JSON-like fo
     },
     "set_gender" : {
         "en" : {
+            "choice" : "Choose the gender:",
             "m" : "will now be considered male.",
             "f" : "will now be considered female.",
-            "nb": "will now be considered other/non-binary"
+            "nb": "will now be considered other/non-binary.",
+            "m_label" : "Male",
+            "f_label" : "Female",
+            "nb_label" : "Non-Binary"
         },
         "it" : {
+            "choice" : "Indica il genere:",
             "m" : "sarà ora considerato maschio.",
             "f" : "sarà ora considerata femmina.",
-            "nb": "sarà ora considerato altro/non-binario"
+            "nb": "sarà ora considerato altro/non-binario.",
+            "m_label" : "Maschio",
+            "f_label" : "Femmina",
+            "nb_label" : "Non Binario"
         },
     },
     "info" : {
