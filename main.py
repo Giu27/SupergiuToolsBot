@@ -48,7 +48,7 @@ class Bot_DB_Manager:
         await self.db.close()
 
 class Bot(AsyncTeleBot):
-    def __init__(self, token : str, owner_id : int, db_path : str, log_path : str="logs", log : bool=False, dev_mode : bool=False, commands : dict[str, list[types.BotCommand]]=commands, languages : dict[str, str]={"en" : "English", "it" : "Italiano"}, localizations : dict[str, dict[str, str]]=localizations, genders : list=["m", "f", "nb"]):
+    def __init__(self, token : str, owner_id : int, db_path : str, log_path : str="logs", log : bool=False, dev_mode : bool=False, commands : dict[str, list[types.BotCommand]]=commands, languages : dict[str, str]={"en" : "English", "it" : "Italiano"}, default_language : str = "en", localizations : dict[str, dict[str, str]]=localizations, genders : list=["m", "f", "nb"]):
         """Inits the bot by setting up database and basic configuration"""
         super().__init__(token)
         self.OWNER_ID = owner_id
@@ -62,6 +62,7 @@ class Bot(AsyncTeleBot):
         self.DEV_MODE = dev_mode #when enabled the bot status notification is disabled
 
         self.languages = languages #A dict containing languages {lang_code : lang_label} i.e. {"en" : English}
+        self.default_language = default_language
         self.commands = commands #Dict containing the commands shown in telegram menù in various languages
         self.localizations = localizations #A dict containing the texts used by the bot: {source: {lang : [element]}} 
         self.genders = genders #List of genders the bots uses to create the menù
@@ -362,10 +363,10 @@ class Bot(AsyncTeleBot):
         await self.edit_message_text(f"{await self.get_viewed_name(us_id)} {self.get_localized_string("set_lang", await self.get_lang(user.id), "confirmation")} {self.languages[data[2]]}.", call.message.chat.id, call.message.id)
 
     async def get_lang(self, us_id : int) -> str:
-        """Returns the user language code, if not found defaults to en"""
+        """Returns the user language code, if not found defaults to the default language"""
         localization = await self.db.get_single_doc("users", self.db.query.user_id == us_id, "localization")
         if localization: return localization
-        else: return self.languages[0]
+        else: return self.default_language 
 
     async def set_lang(self, us_id : int, lang : str):
         """Change the bot language, for the user identified by us_id"""
