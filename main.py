@@ -88,6 +88,7 @@ class Bot(AsyncTeleBot):
         self.register_message_handler(self.random_add, commands=["randomadd"])
         self.register_message_handler(self.random_remove, commands=["randomremove"])
         self.register_message_handler(self.random_empty, commands=["randomempty"])
+        self.register_message_handler(self.print_random_list, commands=["randomlist"])
         self.register_message_handler(self.random_help, commands=["randomhelp"])
         self.register_message_handler(self.request_qrcode, commands=["qrcode"])
         self.register_message_handler(self.set_notifications, commands=["notifications"])
@@ -898,20 +899,44 @@ class Bot(AsyncTeleBot):
         if len(random_list) != 0: bot_answer = random.choice(random_list)
         else: bot_answer = self.get_localized_string("random", await self.get_lang(user.id), "list_is_empty")
 
+        await self.reply_to(message, bot_answer)
+        await self.logging_procedure(message, bot_answer)
+
+    async def random_add(self, message, us_id : int=None):
+        user = message.from_user
+        if us_id == None: us_id = user.id
+
+    async def random_remove(self, message, us_id : int=None):
+        user = message.from_user
+        if us_id == None: us_id = user.id
+
+    async def random_empty(self, message, us_id : int=None):
+        user = message.from_user
+        if us_id == None: us_id = user.id
+
+        await self.set_random_list(us_id, [])
+
+        bot_answer = f"{await self.get_viewed_name(us_id)}: {self.get_localized_string("random", await self.get_lang(user.id), "emptied")}"
         await bot.reply_to(message, bot_answer)
         await self.logging_procedure(message, bot_answer)
 
-    async def random_add(self, message):
-        pass
+    async def print_random_list(self, message, us_id : int=None):
+        user = message.from_user
+        if us_id == None: us_id = user.id
 
-    async def random_remove(self, message):
-        pass
+        random_list = await self.get_random_list(us_id)
 
-    async def random_empty(self, message):
-        pass
+        bot_answer = f"{await self.get_viewed_name(us_id)}: {random_list}"
+        await bot.reply_to(message, bot_answer)
+        await self.logging_procedure(message, bot_answer)
 
     async def random_help(self, message):
-        pass
+        user = message.from_user
+        lang = await self.get_lang(user.id)
+
+        bot_answer = f"randomchoose: {self.get_localized_string("random", lang, "help_choose")}\nrandomadd: {self.get_localized_string("random", lang, "help_add")}\nrandomremove: {self.get_localized_string("random", lang, "help_remove")}\nrandomempty: {self.get_localized_string("random", lang, "help_empty")}\nrandomlist: {self.get_localized_string("random", lang, "help_list")}"
+        await self.reply_to(message, bot_answer)
+        await self.logging_procedure(message, bot_answer)
 
     async def request_qrcode(self, message):
         """Allows the user to generate a qr code containing text"""
