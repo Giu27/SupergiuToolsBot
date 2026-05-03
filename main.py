@@ -71,7 +71,7 @@ class Bot(AsyncTeleBot):
         self.functions = {"validate_target" : self.validate_target, "set_botname" : self.set_botname, "send_message_to" : self.send_message_to, "broadcast" : self.broadcast, "generate_qrcode" : self.generate_qrcode, "reset_botname" : self.reset_botname,
                     "ask_custom_command_content" : self.ask_custom_command_content, "add_custom_command" : self.add_custom_command, "remove_custom_command" : self.remove_custom_command, "set_excl_sentence" : self.set_excl_sentence,
                     "set_permission" : self.set_permission, "set_user_lang" : self.set_user_lang, "set_user_gender" : self.set_user_gender, "get_info" : self.get_info, "get_permissions_list" : self.get_permissions_list, "set_admin" : self.set_admin,
-                    "add_banned_words" : self.add_banned_words, "remove_banned_words" : self.remove_banned_words, "handle_multiple_users" : self.handle_multiple_users}
+                    "add_banned_words" : self.add_banned_words, "remove_banned_words" : self.remove_banned_words, "handle_multiple_users" : self.handle_multiple_users, "add_random_option" : self.add_random_option}
         
         #Register handlers
         self.register_message_handler(self.send_greets, commands=["start", "hello"])
@@ -178,7 +178,7 @@ class Bot(AsyncTeleBot):
             if element: return self.localizations[source][lang][element]
             return self.localizations[source][lang]
         except KeyError:
-            try: return self.localizations["not_found"][lang]
+            try: return self.localizations["not_found"][lang] + f"\n[{source}][{element}]"
             except KeyError: return self.localizations["not_found"]["en"]
 
     async def permission_denied_procedure(self, message, error_msg : str = ""):
@@ -757,6 +757,17 @@ class Bot(AsyncTeleBot):
         except wikipedia.exceptions.PageError:
             bot_answer = self.get_localized_string("wikipedia", lang, "page404")
         return bot_answer
+    
+    async def add_random_option(self, message, us_id : int):
+        user = message.from_user
+        random_list = await self.get_random_list(us_id)
+
+        random_list.append(message.text)
+        await self.set_random_list(us_id, random_list)
+
+        bot_answer = self.get_localized_string("random", await self.get_lang(user.id), "added")
+        await self.reply_to(message, bot_answer)
+        await self.logging_procedure(message, bot_answer)
 
     #commands
     async def send_greets(self, message):
@@ -903,14 +914,23 @@ class Bot(AsyncTeleBot):
         await self.logging_procedure(message, bot_answer)
 
     async def random_add(self, message, us_id : int=None):
+        """Prompt to add a word to the randomchoose list"""
         user = message.from_user
         if us_id == None: us_id = user.id
 
+        bot_answer = self.get_localized_string("random", await self.get_lang(user.id), "prompt_add")
+        await bot.reply_to(message, bot_answer)
+        await self.logging_procedure(message, bot_answer)
+
+        await self.set_event(message, self.add_random_option, us_id)
+
     async def random_remove(self, message, us_id : int=None):
+        """Prompt to remove a word from the randomchoose list"""
         user = message.from_user
         if us_id == None: us_id = user.id
 
     async def random_empty(self, message, us_id : int=None):
+        "Empties the list randomchoose pulls from"
         user = message.from_user
         if us_id == None: us_id = user.id
 
@@ -921,6 +941,7 @@ class Bot(AsyncTeleBot):
         await self.logging_procedure(message, bot_answer)
 
     async def print_random_list(self, message, us_id : int=None):
+        """Send a message containing the list of words for randomchoose"""
         user = message.from_user
         if us_id == None: us_id = user.id
 
@@ -931,6 +952,7 @@ class Bot(AsyncTeleBot):
         await self.logging_procedure(message, bot_answer)
 
     async def random_help(self, message):
+        """Sends a message containing the list of randomchoose related commands"""
         user = message.from_user
         lang = await self.get_lang(user.id)
 
@@ -1263,17 +1285,21 @@ class Bot(AsyncTeleBot):
 
         event = await self.get_event(user.id)
 
-        if event:
-            await self.cancel_command(message, False)
-            if event["command"]:
-                await self.functions[event["next"]](message, event["command"], event["second_arg"])
-            elif event["content"]:
-                await self.functions[event["next"]](message, event["content"]) 
-            else: await self.functions[event["next"]](message)
+        try:
+            if event:
+                await self.cancel_command(message, False)
+                if event["command"]:
+                    await self.functions[event["next"]](message, event["command"], event["second_arg"])
+                elif event["content"]:
+                    await self.functions[event["next"]](message, event["content"]) 
+                else: await self.functions[event["next"]](message)
         
-        else: 
-            if message.text == None: await self.handle_media(message)
-            else: await self.log_and_update(message)
+            else: 
+                if message.text == None: await self.handle_media(message)
+                else: await self.log_and_update(message)
+        except KeyError:
+            bot_answer = self.get_localized_string("error", await self.get_lang(user.id), "illegal_call") + f" {event["next"]}"
+            await self.reply_to(message, bot_answer)
 
     async def handle_media(self,message):
         """Handles media sent from the user"""
