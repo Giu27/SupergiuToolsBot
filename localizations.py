@@ -317,5 +317,43 @@ localizations = { #This dict contains all the texts in the bot in a JSON-like fo
     "cancel" : {
         "en" : "Command cancelled and markup cleared!",
         "it" : "Operazione annullata e markup rimosso!"
+    },
+    "error" : {
+        "en" : {
+            "illegal_call" : "Illegal call to function:"
+        },
+        "it" : {
+            "illegal_call" : "Chiamata illegale alla funzione:"
+        }
+    },
+    "random" : {
+        "en" : {
+            "list_is_empty" : "The list is empty!",
+            "invalid" : "The word entered is not valid!",
+            "added" : "The word has been added!",
+            "removed" : "The word has been removed!",
+            "prompt_add" : "Which word do you want to add?",
+            "prompt_remove" : "Which word do you want to remove?",
+            "emptied" : "The list has been emptied!",
+            "help_choose" : "Returns a word from the list;",
+            "help_add" : "Add a word to the list;",
+            "help_remove" : "Remove a word from the list;",
+            "help_empty" : "Removes all words;",
+            "help_list" : "Shows all the words currently in the list."
+        },
+        "it"  : {
+            "list_is_empty" : "La lista è vuota!",
+            "invalid" : "La parola inserita non è valida!",
+            "added" : "La parola è stata aggiunta!",
+            "removed" : "La parola è stata rimossa!",
+            "prompt_add" : "Quale parola vuoi aggiungere?",
+            "prompt_remove" : "Quale parola vuoi rimuovere?",
+            "emptied" : "La lista è stata svuotata!",
+            "help_choose" : "Restituisce una parola dalla lista;",
+            "help_add" : "Aggiunge una parola alla lista;",
+            "help_remove" : "Rimuove una parola dalla lista;",
+            "help_empty" : "Rimuove tutte le parole;",
+            "help_list" : "Mostra tutte le parole attualmente in lista."
+        }
     }
 }
