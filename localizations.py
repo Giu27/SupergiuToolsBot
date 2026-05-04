@@ -14,6 +14,7 @@ commands = {
         types.BotCommand("gender", "Permette all'utente di cambiare il genere utilizzato da randomname (m -> f -> nb -> m)"),
         types.BotCommand("randomnumber", "Restituisce un numero casuale tra 0 e 999"),
         types.BotCommand("randomname", "Imposta un nome casuale"),
+        types.BotCommand("randomhelp", "Informazioni su altri comandi random"),
         types.BotCommand("qrcode", "Crea un QR Code di un contenuto testuale inviato"),
         types.BotCommand("notifications", "Attiva/Disattiva le notifiche"),
         types.BotCommand("info", "Restituisce le informazioni memorizzate dal bot"),
@@ -32,6 +33,7 @@ commands = {
         types.BotCommand("gender", "Let user change the gender used by randomname (m -> f -> nb -> m)"),
         types.BotCommand("randomnumber", "Return a random number in the 0 to 999 range"),
         types.BotCommand("randomname", "Set a random name"),
+        types.BotCommand("randomhelp", "infos on other random commands"),
         types.BotCommand("qrcode", "Let the user creates a QR Code from text"),
         types.BotCommand("notifications", "Turn on/off the notifications"),
         types.BotCommand("info", "Return the infos the bot has about you"),
@@ -315,5 +317,43 @@ localizations = { #This dict contains all the texts in the bot in a JSON-like fo
     "cancel" : {
         "en" : "Command cancelled and markup cleared!",
         "it" : "Operazione annullata e markup rimosso!"
+    },
+    "error" : {
+        "en" : {
+            "illegal_call" : "Illegal call to function:"
+        },
+        "it" : {
+            "illegal_call" : "Chiamata illegale alla funzione:"
+        }
+    },
+    "random" : {
+        "en" : {
+            "list_is_empty" : "The list is empty!",
+            "invalid" : "The word entered is not valid!",
+            "added" : "The word has been added!",
+            "removed" : "The word has been removed!",
+            "prompt_add" : "Which word do you want to add?",
+            "prompt_remove" : "Which word do you want to remove?",
+            "emptied" : "The list has been emptied!",
+            "help_choose" : "Returns a word from the list;",
+            "help_add" : "Add a word to the list;",
+            "help_remove" : "Remove a word from the list;",
+            "help_empty" : "Removes all words;",
+            "help_list" : "Shows all the words currently in the list."
+        },
+        "it"  : {
+            "list_is_empty" : "La lista è vuota!",
+            "invalid" : "La parola inserita non è valida!",
+            "added" : "La parola è stata aggiunta!",
+            "removed" : "La parola è stata rimossa!",
+            "prompt_add" : "Quale parola vuoi aggiungere?",
+            "prompt_remove" : "Quale parola vuoi rimuovere?",
+            "emptied" : "La lista è stata svuotata!",
+            "help_choose" : "Restituisce una parola dalla lista;",
+            "help_add" : "Aggiunge una parola alla lista;",
+            "help_remove" : "Rimuove una parola dalla lista;",
+            "help_empty" : "Rimuove tutte le parole;",
+            "help_list" : "Mostra tutte le parole attualmente in lista."
+        }
     }
 }

@@ -66,11 +66,13 @@ class Bot(AsyncTeleBot):
         self.commands = commands #Dict containing the commands shown in telegram menù in various languages
         self.localizations = localizations #A dict containing the texts used by the bot: {source: {lang : [element]}} 
         self.genders = genders #List of genders the bots uses to create the menù
+
         #List of functions authorized to be executed by the event system
         self.functions = {"validate_target" : self.validate_target, "set_botname" : self.set_botname, "send_message_to" : self.send_message_to, "broadcast" : self.broadcast, "generate_qrcode" : self.generate_qrcode, "reset_botname" : self.reset_botname,
                     "ask_custom_command_content" : self.ask_custom_command_content, "add_custom_command" : self.add_custom_command, "remove_custom_command" : self.remove_custom_command, "set_excl_sentence" : self.set_excl_sentence,
                     "set_permission" : self.set_permission, "set_user_lang" : self.set_user_lang, "set_user_gender" : self.set_user_gender, "get_info" : self.get_info, "get_permissions_list" : self.get_permissions_list, "set_admin" : self.set_admin,
-                    "add_banned_words" : self.add_banned_words, "remove_banned_words" : self.remove_banned_words, "handle_multiple_users" : self.handle_multiple_users}
+                    "add_banned_words" : self.add_banned_words, "remove_banned_words" : self.remove_banned_words, "handle_multiple_users" : self.handle_multiple_users, "add_random_option" : self.add_random_option, "remove_random_option" : self.remove_random_option,
+                    "random_add" : self.random_add, "random_remove" : self.random_remove, "random_empty" : self.random_empty, "print_random_list" : self.print_random_list}
         
         #Register handlers
         self.register_message_handler(self.send_greets, commands=["start", "hello"])
@@ -83,6 +85,12 @@ class Bot(AsyncTeleBot):
         self.register_message_handler(self.set_user_gender, commands=["gender"])
         self.register_message_handler(self.random_number, commands=["randomnumber"])
         self.register_message_handler(self.random_name, commands=["randomname"])
+        self.register_message_handler(self.random_choose, commands=["randomchoose"])
+        self.register_message_handler(self.random_add, commands=["randomadd"])
+        self.register_message_handler(self.random_remove, commands=["randomremove"])
+        self.register_message_handler(self.random_empty, commands=["randomempty"])
+        self.register_message_handler(self.print_random_list, commands=["randomlist"])
+        self.register_message_handler(self.random_help, commands=["randomhelp"])
         self.register_message_handler(self.request_qrcode, commands=["qrcode"])
         self.register_message_handler(self.set_notifications, commands=["notifications"])
         self.register_message_handler(self.info, commands=["info"])
@@ -101,6 +109,10 @@ class Bot(AsyncTeleBot):
         self.register_message_handler(self.get_ids, commands=["getids"])
         self.register_message_handler(self.send_to_target, commands=["sendto"])
         self.register_message_handler(self.send_in_broadcast, commands=["broadcast"])
+        self.register_message_handler(self.print_person_rlist, commands=["personrandlist"])
+        self.register_message_handler(self.add_person_rlist, commands=["addpersonrandlist"])
+        self.register_message_handler(self.remove_person_rlist, commands=["removepersonrandlist"])
+        self.register_message_handler(self.empty_person_rlist, commands=["emptypersonrandlist"])
         self.register_message_handler(self.add_banned, commands=["addbanned"])
         self.register_message_handler(self.remove_banned, commands=["removebanned"])
         self.register_message_handler(self.add_ultra_banned, commands=["addultrabanned"])
@@ -129,7 +141,8 @@ class Bot(AsyncTeleBot):
             "notifications" : await self.get_notification_status(user.id),
             "localization" : await self.get_lang(user.id),
             "gender" : await self.get_gender(user.id),
-            "event" : await self.get_event(user.id)
+            "event" : await self.get_event(user.id),
+            "random_list" : await self.get_random_list(user.id)
             }
         await self.db.upsert_values("users", user_data, self.db.query.user_id == user.id)
 
@@ -170,7 +183,7 @@ class Bot(AsyncTeleBot):
             if element: return self.localizations[source][lang][element]
             return self.localizations[source][lang]
         except KeyError:
-            try: return self.localizations["not_found"][lang]
+            try: return self.localizations["not_found"][lang] + f"\n[{source}][{element}]"
             except KeyError: return self.localizations["not_found"]["en"]
 
     async def permission_denied_procedure(self, message, error_msg : str = ""):
@@ -470,6 +483,16 @@ class Bot(AsyncTeleBot):
         
         await self.db.upsert_values("users", {"event" : {"next" : next_step, "content" : content, "command" : command_name, "second_arg" : second_arg}}, self.db.query.user_id == user.id)
 
+    async def get_random_list(self, us_id : int) -> list:
+        """Return the list of words for the bot to choose from"""
+        list = await self.db.get_single_doc("users", self.db.query.user_id == us_id, "random_list")
+        if list == None: return []
+        return list
+    
+    async def set_random_list(self, us_id : int, list : list):
+        """Updates the list for the given user"""
+        await self.db.upsert_values("users", {"random_list" : list}, self.db.query.user_id == us_id)
+
     async def send_message_to(self, message, chat_id : int, scope : str = None, acknowledge : bool = True):
         """Send a message to the chat identified by chat_id"""
         user = message.from_user
@@ -739,6 +762,34 @@ class Bot(AsyncTeleBot):
         except wikipedia.exceptions.PageError:
             bot_answer = self.get_localized_string("wikipedia", lang, "page404")
         return bot_answer
+    
+    async def add_random_option(self, message, us_id : int):
+        user = message.from_user
+        random_list = await self.get_random_list(us_id)
+
+        if message.content_type != "text" or message.text in random_list or await self.check_banned_name(message.text):
+            bot_answer = self.get_localized_string("random", await self.get_lang(user.id), "invalid")
+        else:
+            random_list.append(message.text)
+            await self.set_random_list(us_id, random_list)
+            bot_answer = self.get_localized_string("random", await self.get_lang(user.id), "added")
+
+        await self.reply_to(message, bot_answer)
+        await self.logging_procedure(message, bot_answer)
+
+    async def remove_random_option(self, message, us_id : int):
+        user = message.from_user
+        random_list = await self.get_random_list(us_id)
+
+        if message.content_type == "text" and message.text in random_list:
+            random_list.pop(random_list.index(message.text))
+            await self.set_random_list(us_id, random_list)
+            bot_answer = self.get_localized_string("random", await self.get_lang(user.id), "removed")
+        else:
+            bot_answer = self.get_localized_string("random", await self.get_lang(user.id), "invalid")
+
+        await self.reply_to(message, bot_answer, reply_markup=types.ReplyKeyboardRemove())
+        await self.logging_procedure(message, bot_answer)
 
     #commands
     async def send_greets(self, message):
@@ -869,6 +920,100 @@ class Bot(AsyncTeleBot):
         
         await self.set_botname(message, user.id, True)
     
+    async def random_choose(self, message):
+        """Choose a word from the user managed list"""
+        user = message.from_user
+        has_permission = await self.get_permission(user.id, "randomchoose")
+        if has_permission != True:
+            await self.permission_denied_procedure(message, has_permission)
+            return
+        
+        random_list = await self.get_random_list(user.id)
+        if len(random_list) != 0: bot_answer = random.choice(random_list)
+        else: bot_answer = self.get_localized_string("random", await self.get_lang(user.id), "list_is_empty")
+
+        await self.reply_to(message, bot_answer)
+        await self.logging_procedure(message, bot_answer)
+
+    async def random_add(self, message, us_id : int=None):
+        """Prompt to add a word to the randomchoose list"""
+        user = message.from_user
+        if us_id == None: us_id = user.id
+
+        has_permission = await self.get_permission(user.id, "randomadd")
+        if has_permission != True:
+            await self.permission_denied_procedure(message, has_permission)
+            return
+
+        bot_answer = self.get_localized_string("random", await self.get_lang(user.id), "prompt_add")
+        await self.reply_to(message, bot_answer)
+        await self.logging_procedure(message, bot_answer)
+
+        await self.set_event(message, self.add_random_option, us_id)
+
+    async def random_remove(self, message, us_id : int=None):
+        """Prompt to remove a word from the randomchoose list"""
+        user = message.from_user
+        if us_id == None: us_id = user.id
+
+        has_permission = await self.get_permission(user.id, "randomremove")
+        if has_permission != True:
+            await self.permission_denied_procedure(message, has_permission)
+            return
+        
+        random_list = await self.get_random_list(us_id)
+
+        if len(random_list) == 0:
+            bot_answer = self.get_localized_string("random", await self.get_lang(user.id), "list_is_empty")
+            markup = types.ReplyKeyboardRemove()
+        else:
+            markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True, selective=True)
+            for word in random_list:
+                button = types.KeyboardButton(word)
+                markup.add(button)
+        
+            bot_answer = self.get_localized_string("random", await self.get_lang(user.id), "prompt_remove")
+            await self.set_event(message, self.remove_random_option, us_id)
+
+        await self.reply_to(message, bot_answer, reply_markup = markup)
+        await self.logging_procedure(message, bot_answer)   
+
+    async def random_empty(self, message, us_id : int=None):
+        "Empties the list randomchoose pulls from"
+        user = message.from_user
+        if us_id == None: us_id = user.id
+
+        has_permission = await self.get_permission(user.id, "randomempty")
+        if has_permission != True:
+            await self.permission_denied_procedure(message, has_permission)
+            return
+
+        await self.set_random_list(us_id, [])
+
+        bot_answer = f"{await self.get_viewed_name(us_id)}: {self.get_localized_string("random", await self.get_lang(user.id), "emptied")}"
+        await bot.reply_to(message, bot_answer)
+        await self.logging_procedure(message, bot_answer)
+
+    async def print_random_list(self, message, us_id : int=None):
+        """Send a message containing the list of words for randomchoose"""
+        user = message.from_user
+        if us_id == None: us_id = user.id
+
+        random_list = await self.get_random_list(us_id)
+
+        bot_answer = f"{await self.get_viewed_name(us_id)}: {random_list}"
+        await bot.reply_to(message, bot_answer)
+        await self.logging_procedure(message, bot_answer)
+
+    async def random_help(self, message):
+        """Sends a message containing the list of randomchoose related commands"""
+        user = message.from_user
+        lang = await self.get_lang(user.id)
+
+        bot_answer = f"randomchoose: {self.get_localized_string("random", lang, "help_choose")}\nrandomadd: {self.get_localized_string("random", lang, "help_add")}\nrandomremove: {self.get_localized_string("random", lang, "help_remove")}\nrandomempty: {self.get_localized_string("random", lang, "help_empty")}\nrandomlist: {self.get_localized_string("random", lang, "help_list")}"
+        await self.reply_to(message, bot_answer)
+        await self.logging_procedure(message, bot_answer)
+
     async def request_qrcode(self, message):
         """Allows the user to generate a qr code containing text"""
         user = message.from_user
@@ -1048,6 +1193,46 @@ class Bot(AsyncTeleBot):
         await self.set_event(message, self.broadcast)
         await self.logging_procedure(message, bot_answer)
 
+    async def add_person_rlist(self, message):
+        """Allows an admin to add a word to a person's list for randomchoose"""
+        user = message.from_user
+        has_permission = await self.get_permission(user.id, "addpersonrandlist")
+        if not has_permission:
+            await self.permission_denied_procedure(message, "admin_only")
+            return
+        
+        await self.ask_target(message, self.random_add, False)
+
+    async def remove_person_rlist(self, message):
+        """Allows an admin to remove a word from a person's list for randomchoose"""
+        user = message.from_user
+        has_permission = await self.get_permission(user.id, "removepersonrandlist")
+        if not has_permission:
+            await self.permission_denied_procedure(message, "admin_only")
+            return
+        
+        await self.ask_target(message, self.random_remove, False)
+
+    async def print_person_rlist(self, message):
+        """Allows an admin to show a person's list for randomchoose"""
+        user = message.from_user
+        has_permission = await self.get_permission(user.id, "personrandlist")
+        if not has_permission:
+            await self.permission_denied_procedure(message, "admin_only")
+            return
+        
+        await self.ask_target(message, self.print_random_list, False)
+
+    async def empty_person_rlist(self, message):
+        """Allows an admin to delete a person's list for randomchoose"""
+        user = message.from_user
+        has_permission = await self.get_permission(user.id, "emptypersonrandlist")
+        if not has_permission:
+            await self.permission_denied_procedure(message, "admin_only")
+            return
+        
+        await self.ask_target(message, self.random_empty, False)
+
     #Commands to add/remove words to/from the banned list    
     async def add_banned(self, message):
         user = message.from_user
@@ -1194,17 +1379,22 @@ class Bot(AsyncTeleBot):
 
         event = await self.get_event(user.id)
 
-        if event:
-            await self.cancel_command(message, False)
-            if event["command"]:
-                await self.functions[event["next"]](message, event["command"], event["second_arg"])
-            elif event["content"]:
-                await self.functions[event["next"]](message, event["content"]) 
-            else: await self.functions[event["next"]](message)
+        try:
+            if event:
+                await self.cancel_command(message, False)
+                if event["command"]:
+                    await self.functions[event["next"]](message, event["command"], event["second_arg"])
+                elif event["content"]:
+                    await self.functions[event["next"]](message, event["content"]) 
+                else: await self.functions[event["next"]](message)
         
-        else: 
-            if message.text == None: await self.handle_media(message)
-            else: await self.log_and_update(message)
+            else: 
+                if message.text == None: await self.handle_media(message)
+                else: await self.log_and_update(message)
+        except KeyError:
+            bot_answer = self.get_localized_string("error", await self.get_lang(user.id), "illegal_call") + f" {event["next"]}"
+            await self.reply_to(message, bot_answer)
+            await self.logging_procedure(message, bot_answer)
 
     async def handle_media(self,message):
         """Handles media sent from the user"""
