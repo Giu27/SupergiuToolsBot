@@ -184,7 +184,7 @@ class Bot(AsyncTeleBot):
             return self.localizations[source][lang]
         except KeyError:
             try: return self.localizations["not_found"][lang] + f"\n[{source}][{element}]"
-            except KeyError: return self.localizations["not_found"]["en"]
+            except KeyError: return self.localizations["not_found"]["en"] + f"\n[{source}][{element}]"
 
     async def permission_denied_procedure(self, message, error_msg : str = ""):
         """Standard procedure, whenever a user doesn't have the permission to do a certain action"""
@@ -206,8 +206,8 @@ class Bot(AsyncTeleBot):
                 except (KeyError, telebot.apihelper.ApiTelegramException): pass
 
     def generate_random_name(self, gender : str) -> str:
-        """Return a random name between names from Italian, english, French, Ukranian, greek and japanese names"""
-        langs = ["it_IT", "en_UK", "fr_Fr", "uk_UA", "el_GR", "ja_JP"]
+        """Return a random name between names from Italian, English, French, Ukranian, Greek, Spanish and Japanese names"""
+        langs = ["it_IT", "en_UK", "fr_Fr", "uk_UA", "el_GR", "ja_JP", "es_ES"]
         lang = random.choice(langs)
         fake = faker.Faker(lang)
 
@@ -298,7 +298,8 @@ class Bot(AsyncTeleBot):
 
     async def get_viewed_name(self, us_id : int) -> str | None:
         """Returns the currently visualized name in the bot"""
-        if await self.get_botname(us_id): user_name = await self.get_botname(us_id)
+        bot_name = await self.get_botname(us_id)
+        if bot_name: user_name = bot_name
         else: user_name = await self.db.get_single_doc("users", self.db.query.user_id == us_id, "first_name")
         return user_name
 
@@ -991,7 +992,7 @@ class Bot(AsyncTeleBot):
         await self.set_random_list(us_id, [])
 
         bot_answer = f"{await self.get_viewed_name(us_id)}: {self.get_localized_string("random", await self.get_lang(user.id), "emptied")}"
-        await bot.reply_to(message, bot_answer)
+        await self.reply_to(message, bot_answer)
         await self.logging_procedure(message, bot_answer)
 
     async def print_random_list(self, message, us_id : int=None):
@@ -1002,7 +1003,7 @@ class Bot(AsyncTeleBot):
         random_list = await self.get_random_list(us_id)
 
         bot_answer = f"{await self.get_viewed_name(us_id)}: {random_list}"
-        await bot.reply_to(message, bot_answer)
+        await self.reply_to(message, bot_answer)
         await self.logging_procedure(message, bot_answer)
 
     async def random_help(self, message):
