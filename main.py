@@ -103,7 +103,7 @@ class Bot(AsyncTeleBot):
         self.register_message_handler(self.set_person_permission, commands=["setpersonpermission"])
         self.register_message_handler(self.get_person_permissions, commands=["getpersonpermission"])
         self.register_message_handler(self.set_person_admin, commands=["setpersonadmin"])
-        self.register_message_handler(self.set_person_admin, commands=["setpersonsentence"])
+        self.register_message_handler(self.set_person_sentence, commands=["setpersonsentence"])
         self.register_message_handler(self.set_person_lang, commands=["setpersonlang"])
         self.register_message_handler(self.set_person_gender, commands=["setpersongender"])
         self.register_message_handler(self.get_ids, commands=["getids"])
@@ -1365,7 +1365,7 @@ class Bot(AsyncTeleBot):
             elif message_data["type"] == "voice": await self.send_voice(message.chat.id, message_data["file_id"], message_data["caption"])
             elif message_data["type"] == "sticker": await self.send_sticker(message.chat.id, message_data["file_id"])
             elif message_data["type"] == "document": await self.send_document(message.chat.id, message_data["file_id"], caption=message_data["caption"])
-            else: await self.reply_to(message, self.get_localized_string("send_to", self.get_lang(user.id), "unsupported"))
+            else: await self.reply_to(message, self.get_localized_string("send_to", await self.get_lang(user.id), "unsupported"))
 
             if message_data["type"] == "text": content = message_data["text"]
             else: content = message_data["type"]
