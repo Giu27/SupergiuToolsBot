@@ -1,5 +1,6 @@
 #Copyright (C) 2025-2026  Giuseppe Caruso
 import telebot, os, logging, qrcode, wikipedia, random, faker, unidecode, asyncio, aiofiles
+from functools import wraps
 from telebot.async_telebot import AsyncTeleBot
 from dotenv import load_dotenv
 from asynctinydb import TinyDB, Query
@@ -124,6 +125,21 @@ class Bot(AsyncTeleBot):
         self.register_message_handler(self.handle_events, content_types=["text","photo", "video", "sticker", "animation", "document", "audio", "voice"],func= lambda commands:True)
         self.register_callback_query_handler(self.handle_lang_buttons, func=lambda call: call.data.startswith("lang_"))
         self.register_callback_query_handler(self.handle_gender_buttons, func=lambda call: call.data.startswith("gender_"))
+
+    def check_permissions(permission : str, error_msg : str = "default", admin_only : bool = False):
+        """Checks if the caller user can use a function or not. Covers all general cases, specific ones are implemented as needed elsewhere"""
+        def decoratore(func):
+            @wraps(func)
+            async def wrapper(self, message, *args, **kwargs):
+                user = message.from_user
+                is_admin = await self.get_admin(user.id)
+                has_permission = await self.get_permission(user.id, permission)
+                if (not is_admin and admin_only) or not has_permission:
+                    await self.permission_denied_procedure(message, error_msg)
+                    return
+                return await func(self, message, *args, **kwargs)
+            return wrapper
+        return decoratore
 
     async def store_user_data(self, user, chat_id : int):
         """Creates and updates the user data in the database"""
@@ -807,7 +823,8 @@ class Bot(AsyncTeleBot):
 
         await self.reply_to(message, bot_answer)
         await self.logging_procedure(message, bot_answer)
-    
+
+    @check_permissions("lang", "False")
     async def set_user_lang(self, message, us_id : int=None):
         user = message.from_user
         if not us_id: us_id = user.id
@@ -816,63 +833,43 @@ class Bot(AsyncTeleBot):
         for lang, label in self.languages.items():
             button = types.InlineKeyboardButton(label, callback_data="lang_"+str(us_id)+"_"+lang)
             markup.add(button)
-
-        has_permission = await self.get_permission(user.id, "lang")
-        if has_permission != True:
-            await self.permission_denied_procedure(message, has_permission)
-            return
         
         await self.reply_to(message, bot_answer, reply_markup=markup)
         await self.logging_procedure(message, bot_answer)
-    
+
+    @check_permissions("setname", "False")
     async def set_name(self, message):
         """Start the event chain to set the user's botname"""
         user = message.from_user
         bot_answer = self.get_localized_string("set_name", await self.get_lang(user.id), "prompt")
-
-        has_permission = await self.get_permission(user.id, "setname")
-        if has_permission != True:
-            await self.permission_denied_procedure(message, has_permission)
-            return
         
         await self.reply_to(message, bot_answer)
         await self.set_event(message, self.set_botname, content=user.id)
         await self.logging_procedure(message, bot_answer)
-    
+
+    @check_permissions("resetname", "False")
     async def reset_name(self, message):
         """Call function to reset the user's botname."""
         user = message.from_user
-        has_permission = await self.get_permission(user.id, "resetname")
-        if has_permission != True:
-            await self.permission_denied_procedure(message, has_permission)
-            return
         
         await self.reset_botname(message, user.id)
-    
+
+    @check_permissions("sendtoowner", "False")
     async def send_to_owner(self, message):
         """Send a message to the owner of the bot"""
         user = message.from_user
         owner_name = await self.get_viewed_name(self.OWNER_ID)
         bot_answer = f"{self.get_localized_string("send_to", await self.get_lang(user.id), "user")} {owner_name}?"
-
-        has_permission = await self.get_permission(user.id, "sendtoowner")
-        if has_permission != True:
-            await self.permission_denied_procedure(message, has_permission)
-            return
         
         await self.reply_to(message, bot_answer)
         await self.set_event(message, self.send_message_to, content=self.OWNER_ID)
         await self.logging_procedure(message, bot_answer)
-    
+
+    @check_permissions("sendtoadmin", "False")
     async def send_to_admin(self, message):
         """Send a message to all the admins of the bot"""
         user = message.from_user
         bot_answer = self.get_localized_string("send_to", await self.get_lang(user.id), "admins")
-
-        has_permission = await self.get_permission(user.id, "sendtoadmin")
-        if has_permission != True:
-            await self.permission_denied_procedure(message, has_permission)
-            return
         
         await self.reply_to(message, bot_answer)
         await self.set_event(message, self.broadcast, content=True)
@@ -886,7 +883,8 @@ class Bot(AsyncTeleBot):
         bot_answer = await loop.run_in_executor(None, self.generate_wikipedia_event, lang)
         await self.reply_to(message, bot_answer)
         await self.logging_procedure(message, bot_answer)
-    
+
+    @check_permissions("gender", "False")
     async def set_user_gender(self, message, us_id : int=None):
         """Call function to set the user's gender"""
         user = message.from_user
@@ -896,11 +894,6 @@ class Bot(AsyncTeleBot):
         for gender in self.genders:
             button = types.InlineKeyboardButton(self.get_localized_string("set_gender",await self.get_lang(user.id), gender+"_label"), callback_data="gender_"+str(us_id)+"_"+gender)
             markup.add(button)
-
-        has_permission = await self.get_permission(user.id, "gender")
-        if has_permission != True:
-            await self.permission_denied_procedure(message, has_permission)
-            return
         
         await self.reply_to(message, bot_answer, reply_markup=markup)
         await self.logging_procedure(message, bot_answer)
@@ -910,24 +903,18 @@ class Bot(AsyncTeleBot):
         bot_answer = random.randrange(0, 999)
         await self.reply_to(message, bot_answer)
         await self.logging_procedure(message, bot_answer)
-    
+
+    @check_permissions("randomname", "False")
     async def random_name(self, message):
         """Set the user a random name, also doable by using -r as argument for setname"""
         user = message.from_user
-        has_permission = await self.get_permission(user.id, "randomname")
-        if has_permission != True:
-            await self.permission_denied_procedure(message, has_permission)
-            return
         
         await self.set_botname(message, user.id, True)
-    
+
+    @check_permissions("randomchoose", "False")
     async def random_choose(self, message):
         """Choose a word from the user managed list"""
         user = message.from_user
-        has_permission = await self.get_permission(user.id, "randomchoose")
-        if has_permission != True:
-            await self.permission_denied_procedure(message, has_permission)
-            return
         
         random_list = await self.get_random_list(user.id)
         if len(random_list) != 0: bot_answer = random.choice(random_list)
@@ -936,15 +923,11 @@ class Bot(AsyncTeleBot):
         await self.reply_to(message, bot_answer)
         await self.logging_procedure(message, bot_answer)
 
+    @check_permissions("randomadd", "False")
     async def random_add(self, message, us_id : int=None):
         """Prompt to add a word to the randomchoose list"""
         user = message.from_user
         if us_id == None: us_id = user.id
-
-        has_permission = await self.get_permission(user.id, "randomadd")
-        if has_permission != True:
-            await self.permission_denied_procedure(message, has_permission)
-            return
 
         bot_answer = self.get_localized_string("random", await self.get_lang(user.id), "prompt_add")
         await self.reply_to(message, bot_answer)
@@ -952,15 +935,11 @@ class Bot(AsyncTeleBot):
 
         await self.set_event(message, self.add_random_option, us_id)
 
+    @check_permissions("randomremove", "False")
     async def random_remove(self, message, us_id : int=None):
         """Prompt to remove a word from the randomchoose list"""
         user = message.from_user
         if us_id == None: us_id = user.id
-
-        has_permission = await self.get_permission(user.id, "randomremove")
-        if has_permission != True:
-            await self.permission_denied_procedure(message, has_permission)
-            return
         
         random_list = await self.get_random_list(us_id)
 
@@ -979,15 +958,11 @@ class Bot(AsyncTeleBot):
         await self.reply_to(message, bot_answer, reply_markup = markup)
         await self.logging_procedure(message, bot_answer)   
 
+    @check_permissions("randomempty", "False")
     async def random_empty(self, message, us_id : int=None):
         "Empties the list randomchoose pulls from"
         user = message.from_user
         if us_id == None: us_id = user.id
-
-        has_permission = await self.get_permission(user.id, "randomempty")
-        if has_permission != True:
-            await self.permission_denied_procedure(message, has_permission)
-            return
 
         await self.set_random_list(us_id, [])
 
@@ -1015,14 +990,11 @@ class Bot(AsyncTeleBot):
         await self.reply_to(message, bot_answer)
         await self.logging_procedure(message, bot_answer)
 
+    @check_permissions("qrcode", "False")
     async def request_qrcode(self, message):
         """Allows the user to generate a qr code containing text"""
         user = message.from_user
         chat_id = await self.get_chat_id(user.id)
-        has_permission = await self.get_permission(user.id, "qrcode")
-        if has_permission != True:
-            await self.permission_denied_procedure(message, has_permission)
-            return
         
         bot_answer = self.get_localized_string("qrcode", await self.get_lang(user.id), "msg_to_send")
         await self.reply_to(message, bot_answer)
@@ -1441,8 +1413,8 @@ class Bot(AsyncTeleBot):
 if __name__ == "__main__":
     load_dotenv()
 
-    DEV_MODE = False #switches on/off the online/offline notification if testing on a database with multiple users is needed
-    LOG = False #switches on/off the logging of messages received by the bot
+    DEV_MODE = True #switches on/off the online/offline notification if testing on a database with multiple users is needed
+    LOG = True #switches on/off the logging of messages received by the bot
 
     BOT_TOKEN = os.environ.get("BOT_TOKEN")
     OWNER_ID = int(os.environ.get("OWNER_ID"))
