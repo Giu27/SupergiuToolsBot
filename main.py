@@ -1,5 +1,6 @@
 #Copyright (C) 2025-2026  Giuseppe Caruso
 import telebot, os, logging, qrcode, wikipedia, random, faker, unidecode, asyncio, aiofiles
+from functools import wraps
 from telebot.async_telebot import AsyncTeleBot
 from dotenv import load_dotenv
 from asynctinydb import TinyDB, Query
@@ -103,7 +104,7 @@ class Bot(AsyncTeleBot):
         self.register_message_handler(self.set_person_permission, commands=["setpersonpermission"])
         self.register_message_handler(self.get_person_permissions, commands=["getpersonpermission"])
         self.register_message_handler(self.set_person_admin, commands=["setpersonadmin"])
-        self.register_message_handler(self.set_person_admin, commands=["setpersonsentence"])
+        self.register_message_handler(self.set_person_sentence, commands=["setpersonsentence"])
         self.register_message_handler(self.set_person_lang, commands=["setpersonlang"])
         self.register_message_handler(self.set_person_gender, commands=["setpersongender"])
         self.register_message_handler(self.get_ids, commands=["getids"])
@@ -124,6 +125,21 @@ class Bot(AsyncTeleBot):
         self.register_message_handler(self.handle_events, content_types=["text","photo", "video", "sticker", "animation", "document", "audio", "voice"],func= lambda commands:True)
         self.register_callback_query_handler(self.handle_lang_buttons, func=lambda call: call.data.startswith("lang_"))
         self.register_callback_query_handler(self.handle_gender_buttons, func=lambda call: call.data.startswith("gender_"))
+
+    def check_permissions(permission : str, error_msg : str = "default", admin_only : bool = False):
+        """Checks if the caller user can use a function or not. Covers all general cases, specific ones are implemented as needed elsewhere"""
+        def decoratore(func):
+            @wraps(func)
+            async def wrapper(self, message, *args, **kwargs):
+                user = message.from_user
+                is_admin = await self.get_admin(user.id)
+                has_permission = await self.get_permission(user.id, permission)
+                if (not is_admin and admin_only) or not has_permission:
+                    await self.permission_denied_procedure(message, error_msg)
+                    return
+                return await func(self, message, *args, **kwargs)
+            return wrapper
+        return decoratore
 
     async def store_user_data(self, user, chat_id : int):
         """Creates and updates the user data in the database"""
@@ -184,7 +200,7 @@ class Bot(AsyncTeleBot):
             return self.localizations[source][lang]
         except KeyError:
             try: return self.localizations["not_found"][lang] + f"\n[{source}][{element}]"
-            except KeyError: return self.localizations["not_found"]["en"]
+            except KeyError: return self.localizations["not_found"]["en"] + f"\n[{source}][{element}]"
 
     async def permission_denied_procedure(self, message, error_msg : str = ""):
         """Standard procedure, whenever a user doesn't have the permission to do a certain action"""
@@ -206,8 +222,8 @@ class Bot(AsyncTeleBot):
                 except (KeyError, telebot.apihelper.ApiTelegramException): pass
 
     def generate_random_name(self, gender : str) -> str:
-        """Return a random name between names from Italian, english, French, Ukranian, greek and japanese names"""
-        langs = ["it_IT", "en_UK", "fr_Fr", "uk_UA", "el_GR", "ja_JP"]
+        """Return a random name between names from Italian, English, French, Ukranian, Greek, Spanish and Japanese names"""
+        langs = ["it_IT", "en_UK", "fr_Fr", "uk_UA", "el_GR", "ja_JP", "es_ES"]
         lang = random.choice(langs)
         fake = faker.Faker(lang)
 
@@ -298,7 +314,8 @@ class Bot(AsyncTeleBot):
 
     async def get_viewed_name(self, us_id : int) -> str | None:
         """Returns the currently visualized name in the bot"""
-        if await self.get_botname(us_id): user_name = await self.get_botname(us_id)
+        bot_name = await self.get_botname(us_id)
+        if bot_name: user_name = bot_name
         else: user_name = await self.db.get_single_doc("users", self.db.query.user_id == us_id, "first_name")
         return user_name
 
@@ -806,7 +823,8 @@ class Bot(AsyncTeleBot):
 
         await self.reply_to(message, bot_answer)
         await self.logging_procedure(message, bot_answer)
-    
+
+    @check_permissions("lang", "False")
     async def set_user_lang(self, message, us_id : int=None):
         user = message.from_user
         if not us_id: us_id = user.id
@@ -815,63 +833,43 @@ class Bot(AsyncTeleBot):
         for lang, label in self.languages.items():
             button = types.InlineKeyboardButton(label, callback_data="lang_"+str(us_id)+"_"+lang)
             markup.add(button)
-
-        has_permission = await self.get_permission(user.id, "lang")
-        if has_permission != True:
-            await self.permission_denied_procedure(message, has_permission)
-            return
         
         await self.reply_to(message, bot_answer, reply_markup=markup)
         await self.logging_procedure(message, bot_answer)
-    
+
+    @check_permissions("setname", "False")
     async def set_name(self, message):
         """Start the event chain to set the user's botname"""
         user = message.from_user
         bot_answer = self.get_localized_string("set_name", await self.get_lang(user.id), "prompt")
-
-        has_permission = await self.get_permission(user.id, "setname")
-        if has_permission != True:
-            await self.permission_denied_procedure(message, has_permission)
-            return
         
         await self.reply_to(message, bot_answer)
         await self.set_event(message, self.set_botname, content=user.id)
         await self.logging_procedure(message, bot_answer)
-    
+
+    @check_permissions("resetname", "False")
     async def reset_name(self, message):
         """Call function to reset the user's botname."""
         user = message.from_user
-        has_permission = await self.get_permission(user.id, "resetname")
-        if has_permission != True:
-            await self.permission_denied_procedure(message, has_permission)
-            return
         
         await self.reset_botname(message, user.id)
-    
+
+    @check_permissions("sendtoowner", "False")
     async def send_to_owner(self, message):
         """Send a message to the owner of the bot"""
         user = message.from_user
         owner_name = await self.get_viewed_name(self.OWNER_ID)
         bot_answer = f"{self.get_localized_string("send_to", await self.get_lang(user.id), "user")} {owner_name}?"
-
-        has_permission = await self.get_permission(user.id, "sendtoowner")
-        if has_permission != True:
-            await self.permission_denied_procedure(message, has_permission)
-            return
         
         await self.reply_to(message, bot_answer)
         await self.set_event(message, self.send_message_to, content=self.OWNER_ID)
         await self.logging_procedure(message, bot_answer)
-    
+
+    @check_permissions("sendtoadmin", "False")
     async def send_to_admin(self, message):
         """Send a message to all the admins of the bot"""
         user = message.from_user
         bot_answer = self.get_localized_string("send_to", await self.get_lang(user.id), "admins")
-
-        has_permission = await self.get_permission(user.id, "sendtoadmin")
-        if has_permission != True:
-            await self.permission_denied_procedure(message, has_permission)
-            return
         
         await self.reply_to(message, bot_answer)
         await self.set_event(message, self.broadcast, content=True)
@@ -885,7 +883,8 @@ class Bot(AsyncTeleBot):
         bot_answer = await loop.run_in_executor(None, self.generate_wikipedia_event, lang)
         await self.reply_to(message, bot_answer)
         await self.logging_procedure(message, bot_answer)
-    
+
+    @check_permissions("gender", "False")
     async def set_user_gender(self, message, us_id : int=None):
         """Call function to set the user's gender"""
         user = message.from_user
@@ -895,11 +894,6 @@ class Bot(AsyncTeleBot):
         for gender in self.genders:
             button = types.InlineKeyboardButton(self.get_localized_string("set_gender",await self.get_lang(user.id), gender+"_label"), callback_data="gender_"+str(us_id)+"_"+gender)
             markup.add(button)
-
-        has_permission = await self.get_permission(user.id, "gender")
-        if has_permission != True:
-            await self.permission_denied_procedure(message, has_permission)
-            return
         
         await self.reply_to(message, bot_answer, reply_markup=markup)
         await self.logging_procedure(message, bot_answer)
@@ -909,24 +903,18 @@ class Bot(AsyncTeleBot):
         bot_answer = random.randrange(0, 999)
         await self.reply_to(message, bot_answer)
         await self.logging_procedure(message, bot_answer)
-    
+
+    @check_permissions("randomname", "False")
     async def random_name(self, message):
         """Set the user a random name, also doable by using -r as argument for setname"""
         user = message.from_user
-        has_permission = await self.get_permission(user.id, "randomname")
-        if has_permission != True:
-            await self.permission_denied_procedure(message, has_permission)
-            return
         
         await self.set_botname(message, user.id, True)
-    
+
+    @check_permissions("randomchoose", "False")
     async def random_choose(self, message):
         """Choose a word from the user managed list"""
         user = message.from_user
-        has_permission = await self.get_permission(user.id, "randomchoose")
-        if has_permission != True:
-            await self.permission_denied_procedure(message, has_permission)
-            return
         
         random_list = await self.get_random_list(user.id)
         if len(random_list) != 0: bot_answer = random.choice(random_list)
@@ -935,15 +923,11 @@ class Bot(AsyncTeleBot):
         await self.reply_to(message, bot_answer)
         await self.logging_procedure(message, bot_answer)
 
+    @check_permissions("randomadd", "False")
     async def random_add(self, message, us_id : int=None):
         """Prompt to add a word to the randomchoose list"""
         user = message.from_user
         if us_id == None: us_id = user.id
-
-        has_permission = await self.get_permission(user.id, "randomadd")
-        if has_permission != True:
-            await self.permission_denied_procedure(message, has_permission)
-            return
 
         bot_answer = self.get_localized_string("random", await self.get_lang(user.id), "prompt_add")
         await self.reply_to(message, bot_answer)
@@ -951,15 +935,11 @@ class Bot(AsyncTeleBot):
 
         await self.set_event(message, self.add_random_option, us_id)
 
+    @check_permissions("randomremove", "False")
     async def random_remove(self, message, us_id : int=None):
         """Prompt to remove a word from the randomchoose list"""
         user = message.from_user
         if us_id == None: us_id = user.id
-
-        has_permission = await self.get_permission(user.id, "randomremove")
-        if has_permission != True:
-            await self.permission_denied_procedure(message, has_permission)
-            return
         
         random_list = await self.get_random_list(us_id)
 
@@ -978,20 +958,16 @@ class Bot(AsyncTeleBot):
         await self.reply_to(message, bot_answer, reply_markup = markup)
         await self.logging_procedure(message, bot_answer)   
 
+    @check_permissions("randomempty", "False")
     async def random_empty(self, message, us_id : int=None):
         "Empties the list randomchoose pulls from"
         user = message.from_user
         if us_id == None: us_id = user.id
 
-        has_permission = await self.get_permission(user.id, "randomempty")
-        if has_permission != True:
-            await self.permission_denied_procedure(message, has_permission)
-            return
-
         await self.set_random_list(us_id, [])
 
         bot_answer = f"{await self.get_viewed_name(us_id)}: {self.get_localized_string("random", await self.get_lang(user.id), "emptied")}"
-        await bot.reply_to(message, bot_answer)
+        await self.reply_to(message, bot_answer)
         await self.logging_procedure(message, bot_answer)
 
     async def print_random_list(self, message, us_id : int=None):
@@ -1002,7 +978,7 @@ class Bot(AsyncTeleBot):
         random_list = await self.get_random_list(us_id)
 
         bot_answer = f"{await self.get_viewed_name(us_id)}: {random_list}"
-        await bot.reply_to(message, bot_answer)
+        await self.reply_to(message, bot_answer)
         await self.logging_procedure(message, bot_answer)
 
     async def random_help(self, message):
@@ -1014,14 +990,11 @@ class Bot(AsyncTeleBot):
         await self.reply_to(message, bot_answer)
         await self.logging_procedure(message, bot_answer)
 
+    @check_permissions("qrcode", "False")
     async def request_qrcode(self, message):
         """Allows the user to generate a qr code containing text"""
         user = message.from_user
         chat_id = await self.get_chat_id(user.id)
-        has_permission = await self.get_permission(user.id, "qrcode")
-        if has_permission != True:
-            await self.permission_denied_procedure(message, has_permission)
-            return
         
         bot_answer = self.get_localized_string("qrcode", await self.get_lang(user.id), "msg_to_send")
         await self.reply_to(message, bot_answer)
@@ -1078,40 +1051,21 @@ class Bot(AsyncTeleBot):
     #Admin version of the commands above + extra    
     async def get_person_info(self, message):
         await self.ask_target(message, self.get_info, False)
-    
+
+    @check_permissions("setpersonname", "admin_only", True)
     async def set_person_name(self, message):
-        user = message.from_user
-        has_permission = await self.get_permission(user.id, "setpersonname")
-        if not has_permission:
-            await self.permission_denied_procedure(message, "admin_only")
-            return
-        
         await self.ask_target(message, self.set_botname)
-    
+
+    @check_permissions("resetpersonname", "admin_only", True)
     async def reset_person_name(self, message):
-        user = message.from_user
-        has_permission = await self.get_permission(user.id, "resetpersonname")
-        if not has_permission:
-            await self.permission_denied_procedure(message, "admin_only")
-            return
-        
         await self.ask_target(message, self.reset_botname, False)
-    
+
+    @check_permissions("setpersonpermission", "admin_only", True)
     async def set_person_permission(self, message):
-        user = message.from_user
-        has_permission = await self.get_permission(user.id, "setpersonpermission")
-        if not has_permission:
-            await self.permission_denied_procedure(message, "admin_only")
-            return
-        
         await self.ask_target(message, self.set_permission)
-    
+
+    @check_permissions("getpersonpermission", "admin_only", True)
     async def get_person_permissions(self, message):
-        user = message.from_user
-        has_permission = await self.get_permission(user.id, "getpersonpermission")
-        if not has_permission:
-            await self.permission_denied_procedure(message, "admin_only")
-            return
         await self.ask_target(message, self.get_permissions_list, False)
     
     async def set_person_admin(self, message):
@@ -1121,33 +1075,18 @@ class Bot(AsyncTeleBot):
             await self.permission_denied_procedure(message, "owner_only")
             return
         await self.ask_target(message, self.set_admin, False)
-    
+
+    @check_permissions("setpersonsentence", "admin_only", True)
     async def set_person_sentence(self, message):
         """Gives a personal sentence easter egg to a user"""
-        user = message.from_user
-        has_permission = await self.get_permission(user.id, "setpersonsentence")
-        if not has_permission:
-            await self.permission_denied_procedure(message, "admin_only")
-            return
-        
         await self.ask_target(message, self.set_excl_sentence)
-    
+
+    @check_permissions("setpersonlang", "admin_only", True)
     async def set_person_lang(self, message):
-        user = message.from_user
-        has_permission = await self.get_permission(user.id, "setpersonlang")
-        if not has_permission:
-            await self.permission_denied_procedure(message, "admin_only")
-            return
-        
         await self.ask_target(message, self.set_user_lang, False)
-    
+
+    @check_permissions("setpersongender", "admin_only", True)
     async def set_person_gender(self, message):
-        user = message.from_user
-        has_permission = await self.get_permission(user.id, "setpersongender")
-        if not has_permission:
-            await self.permission_denied_procedure(message, "admin_only")
-            return
-        
         await self.ask_target(message, self.set_user_gender, False)
     
     async def get_ids(self, message):
@@ -1167,124 +1106,74 @@ class Bot(AsyncTeleBot):
 
         await self.reply_to(message, bot_answer)
         await self.logging_procedure(message, bot_answer.lstrip())
-    
+
+    @check_permissions("sendto", "admin_only", True)
     async def send_to_target(self, message):
         """Allows an admin to send messages to a specific user"""
-        user = message.from_user
-        has_permission = await self.get_permission(user.id, "sendto")
-        if not has_permission:
-            await self.permission_denied_procedure(message, "admin_only")
-            return
-        
         await self.ask_target(message, self.send_message_to)
-    
+
+    @check_permissions("broadcast", "admin_only", True)
     async def send_in_broadcast(self, message):
         """Event chain to send a message in broadcast"""
         user = message.from_user
         bot_answer = self.get_localized_string("broadcast", await self.get_lang(user.id), "msg_to_send")
-
-        is_admin = await self.get_admin(user.id)
-        has_permission = await self.get_permission(user.id, "broadcast")
-        if not is_admin or not has_permission:
-            await self.permission_denied_procedure(message, "admin_only")
-            return
         
         await self.reply_to(message, bot_answer)
         await self.set_event(message, self.broadcast)
         await self.logging_procedure(message, bot_answer)
 
+    @check_permissions("addpersonrandlist", "admin_only", True)
     async def add_person_rlist(self, message):
         """Allows an admin to add a word to a person's list for randomchoose"""
-        user = message.from_user
-        has_permission = await self.get_permission(user.id, "addpersonrandlist")
-        if not has_permission:
-            await self.permission_denied_procedure(message, "admin_only")
-            return
-        
         await self.ask_target(message, self.random_add, False)
 
+    @check_permissions("removepersonrandlist", "admin_only", True)
     async def remove_person_rlist(self, message):
         """Allows an admin to remove a word from a person's list for randomchoose"""
-        user = message.from_user
-        has_permission = await self.get_permission(user.id, "removepersonrandlist")
-        if not has_permission:
-            await self.permission_denied_procedure(message, "admin_only")
-            return
-        
         await self.ask_target(message, self.random_remove, False)
 
+    @check_permissions("personrandlist", "admin_only", True)
     async def print_person_rlist(self, message):
         """Allows an admin to show a person's list for randomchoose"""
-        user = message.from_user
-        has_permission = await self.get_permission(user.id, "personrandlist")
-        if not has_permission:
-            await self.permission_denied_procedure(message, "admin_only")
-            return
-        
         await self.ask_target(message, self.print_random_list, False)
 
+    @check_permissions("emptypersonrandlist", "admin_only", True)
     async def empty_person_rlist(self, message):
         """Allows an admin to delete a person's list for randomchoose"""
-        user = message.from_user
-        has_permission = await self.get_permission(user.id, "emptypersonrandlist")
-        if not has_permission:
-            await self.permission_denied_procedure(message, "admin_only")
-            return
-        
         await self.ask_target(message, self.random_empty, False)
 
     #Commands to add/remove words to/from the banned list    
+    @check_permissions("addbanned", "admin_only", True)
     async def add_banned(self, message):
         user = message.from_user
         bot_answer = self.get_localized_string("banned_words", await self.get_lang(user.id), "add_banned")
-
-        is_admin = await self.get_admin(user.id)
-        has_permission = await self.get_permission(user.id, "addbanned")
-        if not is_admin or not has_permission:
-            await self.permission_denied_procedure(message, "admin_only")
-            return
         
         await self.reply_to(message, bot_answer)
         await self.set_event(message, self.add_banned_words, content="banned")
         await self.logging_procedure(message, bot_answer)
-    
+
+    @check_permissions("removebanned", "admin_only", True)
     async def remove_banned(self, message):
         user = message.from_user
         bot_answer = self.get_localized_string("banned_words", await self.get_lang(user.id), "remove_banned")
-
-        is_admin = await self.get_admin(user.id)
-        has_permission = await self.get_permission(user.id, "removebanned")
-        if not is_admin or not has_permission:
-            await self.permission_denied_procedure(message, "admin_only")
-            return
         
         await self.reply_to(message, bot_answer)
         await self.set_event(message, self.remove_banned_words, content="banned")
         await self.logging_procedure(message, bot_answer)
-    
+
+    @check_permissions("addbanned", "admin_only", True)
     async def add_ultra_banned(self, message):
         user = message.from_user
         bot_answer = self.get_localized_string("banned_words", await self.get_lang(user.id), "add_ultrabanned")
-
-        is_admin = await self.get_admin(user.id)
-        has_permission = await self.get_permission(user.id, "addbanned")
-        if not is_admin or not has_permission:
-            await self.permission_denied_procedure(message, "admin_only")
-            return
         
         await self.reply_to(message, bot_answer)
         await self.set_event(message, self.add_banned_words, content="ultrabanned")
         await self.logging_procedure(message, bot_answer)
-    
+
+    @check_permissions("removebanned", "admin_only", True)
     async def remove_ultra_banned(self, message):
         user = message.from_user
         bot_answer = self.get_localized_string("banned_words", await self.get_lang(user.id), "remove_banned")
-
-        is_admin = await self.get_admin(user.id)
-        has_permission = await self.get_permission(user.id, "removebanned")
-        if not is_admin or not has_permission:
-            await self.permission_denied_procedure(message, "admin_only")
-            return
         
         await self.reply_to(message, bot_answer)
         await self.set_event(message, self.remove_banned_words, content="ultrabanned")
@@ -1306,17 +1195,12 @@ class Bot(AsyncTeleBot):
 
         await self.reply_to(message, bot_answer)
         await self.logging_procedure(message, bot_answer)
-    
+
+    @check_permissions("addcommand", "admin_only", True)
     async def add_command(self, message):
         """Adds an admin custom command"""
         user = message.from_user
         bot_answer = self.get_localized_string("custom_commands", await self.get_lang(user.id), "add_command")
-
-        is_admin = await self.get_admin(user.id)
-        has_permission = await self.get_permission(user.id, "addcommand")
-        if not is_admin or not has_permission:
-            await self.permission_denied_procedure(message, "admin_only")
-            return
         
         markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True, selective=True)
         for command in await self.get_custom_commands_names():
@@ -1326,17 +1210,12 @@ class Bot(AsyncTeleBot):
         await self.reply_to(message, bot_answer, reply_markup=markup)
         await self.set_event(message, self.ask_custom_command_content)
         await self.logging_procedure(message, bot_answer)
-    
+
+    @check_permissions("removecommand", "admin_only", True)
     async def remove_command(self, message):
         """Removes a admin defined command"""
         user = message.from_user
         bot_answer = self.get_localized_string("custom_commands", await self.get_lang(user.id), "remove_command")
-
-        is_admin = await self.get_admin(user.id)
-        has_permission = await self.get_permission(user.id, "addcommand")
-        if not is_admin or not has_permission:
-            await self.permission_denied_procedure(message, "admin_only")
-            return
         
         markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True, selective=True)
         for command in await self.get_custom_commands_names():
@@ -1364,7 +1243,7 @@ class Bot(AsyncTeleBot):
             elif message_data["type"] == "voice": await self.send_voice(message.chat.id, message_data["file_id"], message_data["caption"])
             elif message_data["type"] == "sticker": await self.send_sticker(message.chat.id, message_data["file_id"])
             elif message_data["type"] == "document": await self.send_document(message.chat.id, message_data["file_id"], caption=message_data["caption"])
-            else: await self.reply_to(message, self.get_localized_string("send_to", self.get_lang(user.id), "unsupported"))
+            else: await self.reply_to(message, self.get_localized_string("send_to", await self.get_lang(user.id), "unsupported"))
 
             if message_data["type"] == "text": content = message_data["text"]
             else: content = message_data["type"]
